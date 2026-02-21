@@ -16,7 +16,6 @@ import {
   MIN_SPAWN_INTERVAL_MS,
   PAN_OFFSET,
   PAN_RADIUS,
-  PLAYER_MARGIN,
   PLAYER_SPEED,
   RETRO_FONT,
   RETRO_PALETTE,
@@ -391,12 +390,26 @@ export class GameScene extends Phaser.Scene {
     return pan;
   }
 
+  private scaleHalfWidth(): number {
+    // Pan tray is the widest part of the scale.
+    const trayHalfWidth = PAN_RADIUS * 1.025 + 2;
+    return PAN_OFFSET + trayHalfWidth;
+  }
+
+  private edgeOverlapAllowance(): number {
+    // Allow half of the full scale width to overlap the wall.
+    // `scaleHalfWidth()` is already half-width, so allowance equals it.
+    return this.scaleHalfWidth();
+  }
+
   private minScaleX(): number {
-    return PAN_OFFSET + PLAYER_MARGIN;
+    return this.scaleHalfWidth() - this.edgeOverlapAllowance();
   }
 
   private maxScaleX(): number {
-    return this.scale.width - PAN_OFFSET - PLAYER_MARGIN;
+    return (
+      this.scale.width - this.scaleHalfWidth() + this.edgeOverlapAllowance()
+    );
   }
 
   private scaleXMid(): number {
@@ -728,6 +741,13 @@ export class GameScene extends Phaser.Scene {
     const longestSide = Math.max(sprite.width || 1, sprite.height || 1);
     sprite.setScale(size / longestSide);
 
+    if (kind === "duck") {
+      sprite.setFlipX(Math.random() < 0.5);
+      sprite.rotation = randomBetween(-0.2, 0.2);
+    } else {
+      sprite.rotation = randomBetween(-0.14, 0.14);
+    }
+
     return sprite;
   }
 
@@ -847,7 +867,7 @@ export class GameScene extends Phaser.Scene {
       localPanX + randomBetween(-PAN_RADIUS * 0.35, PAN_RADIUS * 0.35),
       10 - PAN_RADIUS - item.size * 0.5 - stackHeight,
     );
-    sprite.rotation = randomBetween(-0.18, 0.18);
+    sprite.rotation = randomBetween(-0.14, 0.14);
 
     this.stackLayer.add(sprite);
 
