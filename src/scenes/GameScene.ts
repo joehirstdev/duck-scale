@@ -30,6 +30,7 @@ import {
   type Side,
   type StackedItem,
 } from "../game/constants";
+import { drawRetroBackground } from "../game/ui";
 
 export class GameScene extends Phaser.Scene {
   private background!: Phaser.GameObjects.Graphics;
@@ -159,7 +160,7 @@ export class GameScene extends Phaser.Scene {
     this.keyM = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
     this.keyL = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.L);
 
-    this.balanceScale.x = this.scaleXMid();
+    this.initializeFreshRun();
     this.layout(true);
   }
 
@@ -180,6 +181,7 @@ export class GameScene extends Phaser.Scene {
 
       if (Phaser.Input.Keyboard.JustDown(this.keyM)) {
         this.setPaused(false);
+        this.resetDeathState();
         this.scene.start("MainMenuScene");
       }
 
@@ -195,16 +197,19 @@ export class GameScene extends Phaser.Scene {
       }
 
       if (Phaser.Input.Keyboard.JustDown(this.keyEsc)) {
+        this.resetDeathState();
         this.scene.start("MainMenuScene");
         return;
       }
 
       if (Phaser.Input.Keyboard.JustDown(this.keyM)) {
+        this.resetDeathState();
         this.scene.start("MainMenuScene");
         return;
       }
 
       if (Phaser.Input.Keyboard.JustDown(this.keyL)) {
+        this.resetDeathState();
         this.scene.start("LeaderboardScene");
         return;
       }
@@ -481,27 +486,7 @@ export class GameScene extends Phaser.Scene {
     const height = this.scale.height;
 
     this.background.clear();
-    this.background
-      .fillGradientStyle(
-        RETRO_PALETTE.skyTop,
-        RETRO_PALETTE.skyTop,
-        RETRO_PALETTE.skyBottom,
-        RETRO_PALETTE.skyBottom,
-        1,
-      )
-      .fillRect(0, 0, width, height);
-    this.background
-      .fillStyle(RETRO_PALETTE.sun, 0.9)
-      .fillCircle(width * 0.8, height * 0.22, Math.min(90, height * 0.14));
-    this.background
-      .fillStyle(RETRO_PALETTE.horizon, 0.76)
-      .fillRect(0, height * 0.58, width, height * 0.18);
-    this.background
-      .fillStyle(RETRO_PALETTE.skyline, 0.92)
-      .fillRect(0, height * 0.72, width, height * 0.16);
-    this.background
-      .fillStyle(RETRO_PALETTE.ground, 0.97)
-      .fillRect(0, height - 120, width, 120);
+    drawRetroBackground(this.background, width, height);
 
     this.lanes.clear();
     const leftPan = this.getPanWorldPosition("left");
@@ -687,25 +672,6 @@ export class GameScene extends Phaser.Scene {
   private clearFallingItems(): void {
     for (let index = this.fallingItems.length - 1; index >= 0; index -= 1) {
       this.removeFallingItemAt(index);
-    }
-  }
-
-  private clearStack(stack: StackedItem[]): void {
-    for (let index = stack.length - 1; index >= 0; index -= 1) {
-      stack[index].sprite.destroy();
-    }
-    stack.length = 0;
-  }
-
-  private clearStacks(): void {
-    this.clearStack(this.leftStack);
-    this.clearStack(this.rightStack);
-  }
-
-  private clearLooseBlocks(): void {
-    for (let index = this.looseBlocks.length - 1; index >= 0; index -= 1) {
-      this.looseBlocks[index].sprite.destroy();
-      this.looseBlocks.splice(index, 1);
     }
   }
 
@@ -942,22 +908,40 @@ export class GameScene extends Phaser.Scene {
   }
 
   private resetRun(): void {
-    this.setPaused(false);
-    this.clearFallingItems();
-    this.clearStacks();
-    this.clearLooseBlocks();
+    this.initializeFreshRun();
+  }
 
-    this.score = 0;
-    this.refreshScoreText();
-    this.spawnTimerMs = 0;
-    this.feedbackTimerMs = 0;
-    this.isGameOver = false;
+  private setHudVisible(visible: boolean): void {
+    this.scoreText.setVisible(visible);
+    this.feedbackText.setVisible(visible);
+  }
+
+  private resetDeathState(): void {
     this.deathSequenceActive = false;
     this.deathTipDirection = 1;
     this.deathSpinRemaining = 0;
     this.deathFlightActive = false;
     this.deathFlightVx = 0;
     this.deathFlightVy = 0;
+  }
+
+  private initializeFreshRun(): void {
+    this.itemLayer.removeAll(true);
+    this.stackLayer.removeAll(true);
+    this.debrisLayer.removeAll(true);
+
+    this.fallingItems = [];
+    this.leftStack = [];
+    this.rightStack = [];
+    this.looseBlocks = [];
+
+    this.score = 0;
+    this.refreshScoreText();
+    this.spawnTimerMs = 0;
+    this.feedbackTimerMs = 0;
+    this.isGameOver = false;
+    this.isPaused = false;
+    this.resetDeathState();
 
     this.balanceScale.rotation = 0;
     this.balanceScale.x = this.scaleXMid();
@@ -970,11 +954,7 @@ export class GameScene extends Phaser.Scene {
     this.gameOverBadge.setScale(1);
     this.gameOverUi.setVisible(false);
 
+    this.setPaused(false);
     this.setHudVisible(true);
-  }
-
-  private setHudVisible(visible: boolean): void {
-    this.scoreText.setVisible(visible);
-    this.feedbackText.setVisible(visible);
   }
 }

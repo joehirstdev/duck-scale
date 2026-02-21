@@ -1,46 +1,46 @@
 import Phaser from "phaser";
 import { RETRO_FONT, RETRO_PALETTE } from "./constants";
 
-export const createRetroBackground = (
-  scene: Phaser.Scene,
+export const drawRetroBackground = (
+  graphics: Phaser.GameObjects.Graphics,
   width: number,
   height: number,
 ): void => {
-  const bg = scene.add.graphics();
-  bg.fillGradientStyle(
-    RETRO_PALETTE.skyTop,
-    RETRO_PALETTE.skyTop,
-    RETRO_PALETTE.skyBottom,
-    RETRO_PALETTE.skyBottom,
-    1,
-  );
-  bg.fillRect(0, 0, width, height);
+  graphics
+    .fillGradientStyle(
+      RETRO_PALETTE.skyTop,
+      RETRO_PALETTE.skyTop,
+      RETRO_PALETTE.skyBottom,
+      RETRO_PALETTE.skyBottom,
+      1,
+    )
+    .fillRect(0, 0, width, height);
 
   const sunX = width * 0.76;
   const sunY = height * 0.26;
   const sunRadius = Math.min(92, height * 0.14);
-  bg.fillStyle(RETRO_PALETTE.sun, 0.94).fillCircle(sunX, sunY, sunRadius);
+  graphics.fillStyle(RETRO_PALETTE.sun, 0.94).fillCircle(sunX, sunY, sunRadius);
 
-  bg.lineStyle(2, RETRO_PALETTE.sunLine, 0.62);
+  graphics.lineStyle(2, RETRO_PALETTE.sunLine, 0.62);
   for (let offset = -26; offset <= 26; offset += 11) {
     const y = sunY + offset;
     const halfWidth = Math.sqrt(
       Math.max(0, sunRadius * sunRadius - offset * offset),
     );
-    bg.lineBetween(sunX - halfWidth, y, sunX + halfWidth, y);
+    graphics.lineBetween(sunX - halfWidth, y, sunX + halfWidth, y);
   }
 
-  bg.fillStyle(RETRO_PALETTE.horizon, 0.75);
-  bg.fillRect(0, height * 0.58, width, height * 0.16);
+  graphics.fillStyle(RETRO_PALETTE.horizon, 0.75);
+  graphics.fillRect(0, height * 0.56, width, height * 0.18);
 
   const skylineBaseY = height * 0.74;
   const buildingWidth = Math.max(34, Math.floor(width / 17));
   const buildingHeights = [74, 46, 58, 88, 64, 96, 52, 80, 68, 104];
-  bg.fillStyle(RETRO_PALETTE.skyline, 0.9);
+  graphics.fillStyle(RETRO_PALETTE.skyline, 0.72);
   for (let x = 0; x < width + buildingWidth; x += buildingWidth) {
     const heightIndex = Math.floor(x / buildingWidth) % buildingHeights.length;
     const buildingHeight = buildingHeights[heightIndex];
-    bg.fillRect(
+    graphics.fillRect(
       x,
       skylineBaseY - buildingHeight,
       buildingWidth - 3,
@@ -48,18 +48,23 @@ export const createRetroBackground = (
     );
   }
 
-  bg.fillStyle(RETRO_PALETTE.ground, 0.96).fillRect(
-    0,
-    height - 108,
-    width,
-    108,
-  );
+  graphics
+    .fillStyle(RETRO_PALETTE.ground, 0.96)
+    .fillRect(0, height - 108, width, 108);
 
-  bg.fillStyle(RETRO_PALETTE.frame, 0.12);
+  graphics.fillStyle(RETRO_PALETTE.frame, 0.07);
   for (let y = 0; y < height; y += 7) {
-    bg.fillRect(0, y, width, 2);
+    graphics.fillRect(0, y, width, 2);
   }
+};
 
+export const createRetroBackground = (
+  scene: Phaser.Scene,
+  width: number,
+  height: number,
+): void => {
+  const bg = scene.add.graphics();
+  drawRetroBackground(bg, width, height);
   bg.setDepth(-1);
 };
 

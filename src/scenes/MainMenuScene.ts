@@ -51,6 +51,7 @@ export class MainMenuScene extends Phaser.Scene {
     jam.setAngle(10);
 
     createRetroButton(this, width * 0.5, height * 0.54, "START GAME", () => {
+      this.scene.stop("GameScene");
       this.scene.start("GameScene");
     });
 
