@@ -9,7 +9,7 @@
     "dev": "vite"
   },
   "dependencies": {
-    "pixi.js": "^8.8.1"
+    "phaser": "^3.90.0"
   },
   "devDependencies": {
     "@eslint/js": "^9.21.0",
