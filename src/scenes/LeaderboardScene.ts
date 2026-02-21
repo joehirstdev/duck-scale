@@ -77,15 +77,19 @@ export class LeaderboardScene extends Phaser.Scene {
       });
     }
 
-    const mascot = this.add.image(width * 0.11, height * 0.86, "duck");
+    const mascot = this.add.image(width * 0.11, height * 0.88, "duck");
     mascot.setScale(0.28);
     mascot.setAngle(-14);
 
-    createRetroButton(this, width * 0.5, height - 80, "BACK TO MENU", () => {
+    createRetroButton(this, width * 0.5, height - 70, "BACK TO MENU", () => {
       this.scene.start("MainMenuScene");
     });
 
     this.input.keyboard?.on("keydown-ESC", () => {
+      this.scene.start("MainMenuScene");
+    });
+
+    this.input.keyboard?.on("keydown-M", () => {
       this.scene.start("MainMenuScene");
     });
   }

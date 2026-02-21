@@ -46,11 +46,14 @@ export class GameScene extends Phaser.Scene {
   private gameOverTitle!: Phaser.GameObjects.Text;
   private gameOverScore!: Phaser.GameObjects.Text;
   private gameOverBadge!: Phaser.GameObjects.Text;
-  private gameOverHint!: Phaser.GameObjects.Text;
+  private gameOverRetryText!: Phaser.GameObjects.Text;
+  private gameOverMenuText!: Phaser.GameObjects.Text;
+  private gameOverLeaderboardText!: Phaser.GameObjects.Text;
   private pauseUi!: Phaser.GameObjects.Container;
   private pauseBackdrop!: Phaser.GameObjects.Rectangle;
   private pauseTitle!: Phaser.GameObjects.Text;
-  private pauseHintText!: Phaser.GameObjects.Text;
+  private pauseResumeText!: Phaser.GameObjects.Text;
+  private pauseMenuText!: Phaser.GameObjects.Text;
 
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
   private keyA!: Phaser.Input.Keyboard.Key;
@@ -446,13 +449,16 @@ export class GameScene extends Phaser.Scene {
 
     this.scoreText.setPosition(width * 0.5, 20);
     this.feedbackText.setPosition(width * 0.5, height * 0.22);
-    this.gameOverTitle.setPosition(width * 0.5, height * 0.34);
-    this.gameOverScore.setPosition(width * 0.5, height * 0.45);
+    this.gameOverTitle.setPosition(width * 0.5, height * 0.35);
+    this.gameOverScore.setPosition(width * 0.5, height * 0.5);
     this.gameOverBadge.setPosition(width * 0.5, height * 0.54);
-    this.gameOverHint.setPosition(width * 0.5, height * 0.66);
+    this.gameOverRetryText.setPosition(width * 0.5, height * 0.62);
+    this.gameOverMenuText.setPosition(width * 0.5, height * 0.69);
+    this.gameOverLeaderboardText.setPosition(width * 0.5, height * 0.76);
     this.pauseBackdrop.setSize(width, height);
-    this.pauseTitle.setPosition(width * 0.5, height * 0.43);
-    this.pauseHintText.setPosition(width * 0.5, height * 0.57);
+    this.pauseTitle.setPosition(width * 0.5, height * 0.42);
+    this.pauseResumeText.setPosition(width * 0.5, height * 0.55);
+    this.pauseMenuText.setPosition(width * 0.5, height * 0.66);
 
     this.drawWorld();
   }
@@ -539,27 +545,45 @@ export class GameScene extends Phaser.Scene {
     this.gameOverBadge.setOrigin(0.5);
     this.gameOverBadge.setVisible(false);
 
-    this.gameOverHint = this.add.text(
+    this.gameOverRetryText = this.add.text(0, 0, "Press SPACE to retry", {
+      fontFamily: RETRO_FONT,
+      fontSize: "24px",
+      color: "#fff4df",
+      stroke: "#1c111a",
+      strokeThickness: 4,
+    });
+    this.gameOverRetryText.setOrigin(0.5);
+
+    this.gameOverMenuText = this.add.text(0, 0, "Press M for main menu", {
+      fontFamily: RETRO_FONT,
+      fontSize: "24px",
+      color: "#fff4df",
+      stroke: "#1c111a",
+      strokeThickness: 4,
+    });
+    this.gameOverMenuText.setOrigin(0.5);
+
+    this.gameOverLeaderboardText = this.add.text(
       0,
       0,
-      "SPACE or R to retry\nM menu    L leaderboard",
+      "Press L to view leaderboard",
       {
         fontFamily: RETRO_FONT,
-        fontSize: "28px",
+        fontSize: "24px",
         color: "#fff4df",
         stroke: "#1c111a",
-        strokeThickness: 5,
-        align: "center",
+        strokeThickness: 4,
       },
     );
-    this.gameOverHint.setOrigin(0.5);
-    this.gameOverHint.setLineSpacing(10);
+    this.gameOverLeaderboardText.setOrigin(0.5);
 
     this.gameOverUi = this.add.container(0, 0, [
       this.gameOverTitle,
       this.gameOverScore,
       this.gameOverBadge,
-      this.gameOverHint,
+      this.gameOverRetryText,
+      this.gameOverMenuText,
+      this.gameOverLeaderboardText,
     ]);
     this.gameOverUi.setDepth(2100);
     this.gameOverUi.setVisible(false);
@@ -576,7 +600,7 @@ export class GameScene extends Phaser.Scene {
     );
     this.pauseBackdrop.setOrigin(0, 0);
 
-    this.pauseTitle = this.add.text(0, 0, "PAUSED", {
+    this.pauseTitle = this.add.text(0, 0, "GAME PAUSED", {
       fontFamily: RETRO_FONT,
       fontSize: "64px",
       color: "#ffe39d",
@@ -586,26 +610,34 @@ export class GameScene extends Phaser.Scene {
     });
     this.pauseTitle.setOrigin(0.5);
 
-    this.pauseHintText = this.add.text(
+    this.pauseResumeText = this.add.text(
       0,
       0,
-      "SPACE or ESC to resume\nM for menu",
+      "Press SPACE or ESC to continue",
       {
         fontFamily: RETRO_FONT,
-        fontSize: "27px",
+        fontSize: "24px",
         color: "#fff4de",
         stroke: "#24151b",
         strokeThickness: 5,
-        align: "center",
       },
     );
-    this.pauseHintText.setOrigin(0.5);
-    this.pauseHintText.setLineSpacing(10);
+    this.pauseResumeText.setOrigin(0.5);
+
+    this.pauseMenuText = this.add.text(0, 0, "Press M for main menu", {
+      fontFamily: RETRO_FONT,
+      fontSize: "24px",
+      color: "#fff4de",
+      stroke: "#24151b",
+      strokeThickness: 5,
+    });
+    this.pauseMenuText.setOrigin(0.5);
 
     this.pauseUi = this.add.container(0, 0, [
       this.pauseBackdrop,
       this.pauseTitle,
-      this.pauseHintText,
+      this.pauseResumeText,
+      this.pauseMenuText,
     ]);
     this.pauseUi.setDepth(2000);
     this.pauseUi.setVisible(false);

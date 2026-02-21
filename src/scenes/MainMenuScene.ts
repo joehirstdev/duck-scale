@@ -42,12 +42,12 @@ export class MainMenuScene extends Phaser.Scene {
     );
     subtitle.setOrigin(0.5);
 
-    const duck = this.add.image(width * 0.34, height * 0.42, "duck");
-    duck.setScale(0.35);
+    const duck = this.add.image(width * 0.32, height * 0.42, "duck");
+    duck.setScale(0.23);
     duck.setAngle(-12);
 
-    const jam = this.add.image(width * 0.66, height * 0.42, "jam");
-    jam.setScale(0.3);
+    const jam = this.add.image(width * 0.68, height * 0.42, "jam");
+    jam.setScale(0.2);
     jam.setAngle(10);
 
     createRetroButton(this, width * 0.5, height * 0.54, "START GAME", () => {
