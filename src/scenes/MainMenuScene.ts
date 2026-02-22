@@ -19,6 +19,13 @@ export class MainMenuScene extends Phaser.Scene {
     const width = this.scale.width;
     const height = this.scale.height;
     this.sound.stopByKey(SOUNDTRACK_KEY);
+    const startGame = (): void => {
+      this.scene.stop("GameScene");
+      this.scene.start("GameScene");
+    };
+    const openLeaderboard = (): void => {
+      this.scene.start("LeaderboardScene");
+    };
 
     createRetroBackground(this, width, height);
 
@@ -53,14 +60,21 @@ export class MainMenuScene extends Phaser.Scene {
     jam.setScale(0.2);
     jam.setAngle(10);
 
-    createRetroButton(this, width * 0.5, height * 0.54, "START GAME", () => {
-      this.scene.stop("GameScene");
-      this.scene.start("GameScene");
-    });
+    createRetroButton(
+      this,
+      width * 0.5,
+      height * 0.54,
+      "START GAME",
+      startGame,
+    );
 
-    createRetroButton(this, width * 0.5, height * 0.66, "LEADERBOARD", () => {
-      this.scene.start("LeaderboardScene");
-    });
+    createRetroButton(
+      this,
+      width * 0.5,
+      height * 0.66,
+      "LEADERBOARD",
+      openLeaderboard,
+    );
 
     const entries = readLeaderboard();
     const highScore = entries[0]?.score ?? 0;
@@ -113,16 +127,8 @@ export class MainMenuScene extends Phaser.Scene {
       stagger: 180,
     });
 
-    this.input.keyboard?.on("keydown-SPACE", () => {
-      this.scene.start("GameScene");
-    });
-
-    this.input.keyboard?.on("keydown-ENTER", () => {
-      this.scene.start("GameScene");
-    });
-
-    this.input.keyboard?.on("keydown-L", () => {
-      this.scene.start("LeaderboardScene");
-    });
+    this.input.keyboard?.on("keydown-SPACE", startGame);
+    this.input.keyboard?.on("keydown-ENTER", startGame);
+    this.input.keyboard?.on("keydown-L", openLeaderboard);
   }
 }

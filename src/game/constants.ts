@@ -26,7 +26,6 @@ export const GAME_WIDTH = 960;
 export const GAME_HEIGHT = 640;
 
 export const PLAYER_SPEED = 11;
-export const PLAYER_MARGIN = 20;
 export const PAN_OFFSET = 92;
 export const PAN_RADIUS = 38;
 export const FALLING_ITEM_MIN_SIZE = 28;

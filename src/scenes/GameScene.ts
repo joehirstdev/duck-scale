@@ -37,6 +37,12 @@ const QUACK_SFX_KEY = "quackSfx";
 const GLASS_BREAK_SFX_KEY = "glassBreakSfx";
 const SUCCESS_SFX_KEY = "successSfx";
 const LOSE_SFX_KEY = "loseSfx";
+const SCALE_BASELINE_OFFSET = 88;
+const SOUNDTRACK_VOLUME = 0.35;
+const QUACK_SFX_VOLUME = 0.12;
+const GLASS_BREAK_SFX_VOLUME = 0.35;
+const SUCCESS_SFX_VOLUME = 0.8;
+const LOSE_SFX_VOLUME = 0.15;
 
 export class GameScene extends Phaser.Scene {
   private background!: Phaser.GameObjects.Graphics;
@@ -180,7 +186,6 @@ export class GameScene extends Phaser.Scene {
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.stopSoundtrack();
     });
-    this.startSoundtrackLoop();
 
     this.initializeFreshRun();
     this.layout(true);
@@ -209,10 +214,7 @@ export class GameScene extends Phaser.Scene {
       }
 
       if (Phaser.Input.Keyboard.JustDown(this.keyM)) {
-        this.setPaused(false, false);
-        this.stopSoundtrack();
-        this.resetDeathState();
-        this.scene.start("MainMenuScene");
+        this.goToScene("MainMenuScene");
       }
 
       return;
@@ -224,30 +226,21 @@ export class GameScene extends Phaser.Scene {
         Phaser.Input.Keyboard.JustDown(this.keySpace) ||
         Phaser.Input.Keyboard.JustDown(this.keyEnter)
       ) {
-        this.resetRun();
+        this.initializeFreshRun();
+        return;
       }
 
       if (
         Phaser.Input.Keyboard.JustDown(this.keyEsc) ||
-        Phaser.Input.Keyboard.JustDown(this.keyQ)
+        Phaser.Input.Keyboard.JustDown(this.keyQ) ||
+        Phaser.Input.Keyboard.JustDown(this.keyM)
       ) {
-        this.stopSoundtrack();
-        this.resetDeathState();
-        this.scene.start("MainMenuScene");
-        return;
-      }
-
-      if (Phaser.Input.Keyboard.JustDown(this.keyM)) {
-        this.stopSoundtrack();
-        this.resetDeathState();
-        this.scene.start("MainMenuScene");
+        this.goToScene("MainMenuScene");
         return;
       }
 
       if (Phaser.Input.Keyboard.JustDown(this.keyL)) {
-        this.stopSoundtrack();
-        this.resetDeathState();
-        this.scene.start("LeaderboardScene");
+        this.goToScene("LeaderboardScene");
         return;
       }
     }
@@ -289,11 +282,12 @@ export class GameScene extends Phaser.Scene {
           } else {
             const knocked = this.knockTopItemFromStack(caughtSide);
             if (knocked) {
-              if (caughtSide === "left") {
-                this.playQuackSfx();
-              } else {
-                this.playGlassBreakSfx();
-              }
+              this.playSfx(
+                caughtSide === "left" ? QUACK_SFX_KEY : GLASS_BREAK_SFX_KEY,
+                caughtSide === "left"
+                  ? QUACK_SFX_VOLUME
+                  : GLASS_BREAK_SFX_VOLUME,
+              );
               this.removeFallingItemAt(index); // make this spin with animation
               this.showFeedback("Wrong side!", "#ff9e80");
             }
@@ -311,10 +305,7 @@ export class GameScene extends Phaser.Scene {
         }
       }
 
-      const leftWeight = this.getStackWeight(this.leftStack);
-      const rightWeight = this.getStackWeight(this.rightStack);
-      const weightImbalance = Math.abs(leftWeight - rightWeight);
-      if (weightImbalance > MAX_WEIGHT_IMBALANCE) {
+      if (this.getWeightImbalance() > MAX_WEIGHT_IMBALANCE) {
         this.triggerDeath();
       }
     } else {
@@ -345,13 +336,7 @@ export class GameScene extends Phaser.Scene {
         this.balanceScale.rotation += this.deathTipDirection * 0.32 * deltaTime;
       }
     } else {
-      const leftWeight = this.getStackWeight(this.leftStack);
-      const rightWeight = this.getStackWeight(this.rightStack);
-      const targetRotation = clamp(
-        (rightWeight - leftWeight) / 240,
-        -0.36,
-        0.36,
-      );
+      const targetRotation = clamp(this.getWeightDelta() / 240, -0.36, 0.36);
       const rotationLerp = Math.min(1, 0.14 * deltaTime);
       this.balanceScale.rotation +=
         (targetRotation - this.balanceScale.rotation) * rotationLerp;
@@ -502,7 +487,7 @@ export class GameScene extends Phaser.Scene {
     this.lastWidth = width;
     this.lastHeight = height;
 
-    this.balanceScale.y = height - 88;
+    this.balanceScale.y = height - SCALE_BASELINE_OFFSET;
     this.balanceScale.x = clamp(
       this.balanceScale.x || width * 0.5,
       this.minScaleX(),
@@ -705,72 +690,43 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private startSoundtrackLoop(): void {
-    const start = (): void => {
-      this.stopSoundtrack();
-      this.sound.play(SOUNDTRACK_KEY, {
-        loop: true,
-        volume: 0.35,
-      });
-    };
-
+  private goToScene(target: "MainMenuScene" | "LeaderboardScene"): void {
+    this.setPaused(false, false);
     this.stopSoundtrack();
-    const started = this.sound.play(SOUNDTRACK_KEY, {
-      loop: true,
-      volume: 0.35,
-    });
-    if (started) {
+    this.resetDeathState();
+    this.scene.start(target);
+  }
+
+  private startSoundtrackLoop(): void {
+    this.stopSoundtrack();
+
+    if (this.sound.locked) {
+      this.sound.once(Phaser.Sound.Events.UNLOCKED, () => {
+        this.sound.play(SOUNDTRACK_KEY, {
+          loop: true,
+          volume: SOUNDTRACK_VOLUME,
+        });
+      });
       return;
     }
 
-    if (this.sound.locked) {
-      this.sound.once(Phaser.Sound.Events.UNLOCKED, start);
-    } else {
-      start();
-    }
+    this.sound.play(SOUNDTRACK_KEY, {
+      loop: true,
+      volume: SOUNDTRACK_VOLUME,
+    });
   }
 
   private stopSoundtrack(): void {
     this.sound.stopByKey(SOUNDTRACK_KEY);
   }
 
-  private playQuackSfx(): void {
+  private playSfx(key: string, volume: number): void {
     if (this.sound.locked) {
       return;
     }
 
-    this.sound.play(QUACK_SFX_KEY, {
-      volume: 0.12,
-    });
-  }
-
-  private playGlassBreakSfx(): void {
-    if (this.sound.locked) {
-      return;
-    }
-
-    this.sound.play(GLASS_BREAK_SFX_KEY, {
-      volume: 0.25,
-    });
-  }
-
-  private playSuccessSfx(): void {
-    if (this.sound.locked) {
-      return;
-    }
-
-    this.sound.play(SUCCESS_SFX_KEY, {
-      volume: 0.8,
-    });
-  }
-
-  private playLoseSfx(): void {
-    if (this.sound.locked) {
-      return;
-    }
-
-    this.sound.play(LOSE_SFX_KEY, {
-      volume: 0.15,
+    this.sound.play(key, {
+      volume,
     });
   }
 
@@ -812,6 +768,16 @@ export class GameScene extends Phaser.Scene {
 
   private getStackWeight(stack: StackedItem[]): number {
     return stack.reduce((weight, stacked) => weight + stacked.size, 0);
+  }
+
+  private getWeightDelta(): number {
+    return (
+      this.getStackWeight(this.rightStack) - this.getStackWeight(this.leftStack)
+    );
+  }
+
+  private getWeightImbalance(): number {
+    return Math.abs(this.getWeightDelta());
   }
 
   private getLandingWorldPosition(
@@ -919,22 +885,18 @@ export class GameScene extends Phaser.Scene {
     const previousHighScore = readLeaderboard()[0]?.score ?? 0;
     const isNewHighScore = this.score > 0 && this.score > previousHighScore;
     addLeaderboardScore(this.score);
-    this.playLoseSfx();
+    this.playSfx(LOSE_SFX_KEY, LOSE_SFX_VOLUME);
     this.stopSoundtrack();
 
     this.showFeedback("Too imbalanced!", "#ff8080");
     this.isGameOver = true;
     this.deathSequenceActive = true;
-    const leftWeight = this.getStackWeight(this.leftStack);
-    const rightWeight = this.getStackWeight(this.rightStack);
-    this.deathTipDirection =
-      leftWeight > rightWeight
-        ? -1
-        : rightWeight > leftWeight
-          ? 1
-          : Math.random() < 0.5
-            ? -1
-            : 1;
+    const weightDelta = this.getWeightDelta();
+    if (weightDelta === 0) {
+      this.deathTipDirection = Math.random() < 0.5 ? -1 : 1;
+    } else {
+      this.deathTipDirection = weightDelta > 0 ? 1 : -1;
+    }
 
     this.deathSpinRemaining = DEATH_SPIN_TOTAL;
     this.deathFlightActive = false;
@@ -975,7 +937,7 @@ export class GameScene extends Phaser.Scene {
     stack.push(stackedItem);
 
     this.score += 1;
-    this.playSuccessSfx();
+    this.playSfx(SUCCESS_SFX_KEY, SUCCESS_SFX_VOLUME);
     this.refreshScoreText();
     this.showFeedback("+1 caught", "#b3ffb3");
   }
@@ -1038,10 +1000,6 @@ export class GameScene extends Phaser.Scene {
     return canCatchLeft ? "left" : "right";
   }
 
-  private resetRun(): void {
-    this.initializeFreshRun();
-  }
-
   private setHudVisible(visible: boolean): void {
     this.scoreText.setVisible(visible);
     this.feedbackText.setVisible(visible);
@@ -1076,7 +1034,7 @@ export class GameScene extends Phaser.Scene {
 
     this.balanceScale.rotation = 0;
     this.balanceScale.x = this.scaleXMid();
-    this.balanceScale.y = this.scale.height - 88;
+    this.balanceScale.y = this.scale.height - SCALE_BASELINE_OFFSET;
 
     this.feedbackText.setAlpha(0);
     this.gameOverTitle.setScale(1);

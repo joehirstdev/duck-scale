@@ -18,6 +18,9 @@ export class LeaderboardScene extends Phaser.Scene {
     const width = this.scale.width;
     const height = this.scale.height;
     this.sound.stopByKey(SOUNDTRACK_KEY);
+    const goToMenu = (): void => {
+      this.scene.start("MainMenuScene");
+    };
 
     createRetroBackground(this, width, height);
 
@@ -84,20 +87,10 @@ export class LeaderboardScene extends Phaser.Scene {
     mascot.setScale(0.28);
     mascot.setAngle(-14);
 
-    createRetroButton(this, width * 0.5, height - 70, "BACK TO MENU", () => {
-      this.scene.start("MainMenuScene");
-    });
+    createRetroButton(this, width * 0.5, height - 70, "BACK TO MENU", goToMenu);
 
-    this.input.keyboard?.on("keydown-M", () => {
-      this.scene.start("MainMenuScene");
-    });
-
-    this.input.keyboard?.on("keydown-ESC", () => {
-      this.scene.start("MainMenuScene");
-    });
-
-    this.input.keyboard?.on("keydown-ENTER", () => {
-      this.scene.start("MainMenuScene");
-    });
+    this.input.keyboard?.on("keydown-M", goToMenu);
+    this.input.keyboard?.on("keydown-ESC", goToMenu);
+    this.input.keyboard?.on("keydown-ENTER", goToMenu);
   }
 }
