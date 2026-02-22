@@ -32,6 +32,12 @@ import {
 } from "../game/constants";
 import { drawRetroBackground } from "../game/ui";
 
+const SOUNDTRACK_KEY = "soundtrack";
+const QUACK_SFX_KEY = "quackSfx";
+const GLASS_BREAK_SFX_KEY = "glassBreakSfx";
+const SUCCESS_SFX_KEY = "successSfx";
+const LOSE_SFX_KEY = "loseSfx";
+
 export class GameScene extends Phaser.Scene {
   private background!: Phaser.GameObjects.Graphics;
   private lanes!: Phaser.GameObjects.Graphics;
@@ -91,8 +97,13 @@ export class GameScene extends Phaser.Scene {
   }
 
   preload(): void {
-    this.load.image("duck", "/assets/duck.png");
+    this.load.image("duck", "/assets/duck.webp");
     this.load.image("jam", "/assets/jam.webp");
+    this.load.audio(SOUNDTRACK_KEY, "/assets/aparte.ogg");
+    this.load.audio(QUACK_SFX_KEY, "/assets/quack.ogg");
+    this.load.audio(GLASS_BREAK_SFX_KEY, "/assets/glass-break.ogg");
+    this.load.audio(SUCCESS_SFX_KEY, "/assets/success.ogg");
+    this.load.audio(LOSE_SFX_KEY, "/assets/lose.ogg");
   }
 
   create(): void {
@@ -166,6 +177,11 @@ export class GameScene extends Phaser.Scene {
     this.keyL = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.L);
     this.keyQ = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
 
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.stopSoundtrack();
+    });
+    this.startSoundtrackLoop();
+
     this.initializeFreshRun();
     this.layout(true);
   }
@@ -193,7 +209,8 @@ export class GameScene extends Phaser.Scene {
       }
 
       if (Phaser.Input.Keyboard.JustDown(this.keyM)) {
-        this.setPaused(false);
+        this.setPaused(false, false);
+        this.stopSoundtrack();
         this.resetDeathState();
         this.scene.start("MainMenuScene");
       }
@@ -214,18 +231,21 @@ export class GameScene extends Phaser.Scene {
         Phaser.Input.Keyboard.JustDown(this.keyEsc) ||
         Phaser.Input.Keyboard.JustDown(this.keyQ)
       ) {
+        this.stopSoundtrack();
         this.resetDeathState();
         this.scene.start("MainMenuScene");
         return;
       }
 
       if (Phaser.Input.Keyboard.JustDown(this.keyM)) {
+        this.stopSoundtrack();
         this.resetDeathState();
         this.scene.start("MainMenuScene");
         return;
       }
 
       if (Phaser.Input.Keyboard.JustDown(this.keyL)) {
+        this.stopSoundtrack();
         this.resetDeathState();
         this.scene.start("LeaderboardScene");
         return;
@@ -269,6 +289,11 @@ export class GameScene extends Phaser.Scene {
           } else {
             const knocked = this.knockTopItemFromStack(caughtSide);
             if (knocked) {
+              if (caughtSide === "left") {
+                this.playQuackSfx();
+              } else {
+                this.playGlassBreakSfx();
+              }
               this.removeFallingItemAt(index); // make this spin with animation
               this.showFeedback("Wrong side!", "#ff9e80");
             }
@@ -477,7 +502,7 @@ export class GameScene extends Phaser.Scene {
     this.lastWidth = width;
     this.lastHeight = height;
 
-    this.balanceScale.y = height - 106;
+    this.balanceScale.y = height - 88;
     this.balanceScale.x = clamp(
       this.balanceScale.x || width * 0.5,
       this.minScaleX(),
@@ -660,9 +685,93 @@ export class GameScene extends Phaser.Scene {
     this.pauseUi.setVisible(false);
   }
 
-  private setPaused(paused: boolean): void {
+  private setPaused(paused: boolean, manageSound = true): void {
     this.isPaused = paused;
     this.pauseUi.setVisible(paused);
+
+    if (!manageSound) {
+      return;
+    }
+
+    const soundtrack = this.sound.get(SOUNDTRACK_KEY);
+    if (!soundtrack) {
+      return;
+    }
+
+    if (paused) {
+      soundtrack.pause();
+    } else {
+      soundtrack.resume();
+    }
+  }
+
+  private startSoundtrackLoop(): void {
+    const start = (): void => {
+      this.stopSoundtrack();
+      this.sound.play(SOUNDTRACK_KEY, {
+        loop: true,
+        volume: 0.35,
+      });
+    };
+
+    this.stopSoundtrack();
+    const started = this.sound.play(SOUNDTRACK_KEY, {
+      loop: true,
+      volume: 0.35,
+    });
+    if (started) {
+      return;
+    }
+
+    if (this.sound.locked) {
+      this.sound.once(Phaser.Sound.Events.UNLOCKED, start);
+    } else {
+      start();
+    }
+  }
+
+  private stopSoundtrack(): void {
+    this.sound.stopByKey(SOUNDTRACK_KEY);
+  }
+
+  private playQuackSfx(): void {
+    if (this.sound.locked) {
+      return;
+    }
+
+    this.sound.play(QUACK_SFX_KEY, {
+      volume: 0.12,
+    });
+  }
+
+  private playGlassBreakSfx(): void {
+    if (this.sound.locked) {
+      return;
+    }
+
+    this.sound.play(GLASS_BREAK_SFX_KEY, {
+      volume: 0.25,
+    });
+  }
+
+  private playSuccessSfx(): void {
+    if (this.sound.locked) {
+      return;
+    }
+
+    this.sound.play(SUCCESS_SFX_KEY, {
+      volume: 0.8,
+    });
+  }
+
+  private playLoseSfx(): void {
+    if (this.sound.locked) {
+      return;
+    }
+
+    this.sound.play(LOSE_SFX_KEY, {
+      volume: 0.15,
+    });
   }
 
   private localToWorld(
@@ -810,6 +919,8 @@ export class GameScene extends Phaser.Scene {
     const previousHighScore = readLeaderboard()[0]?.score ?? 0;
     const isNewHighScore = this.score > 0 && this.score > previousHighScore;
     addLeaderboardScore(this.score);
+    this.playLoseSfx();
+    this.stopSoundtrack();
 
     this.showFeedback("Too imbalanced!", "#ff8080");
     this.isGameOver = true;
@@ -864,6 +975,7 @@ export class GameScene extends Phaser.Scene {
     stack.push(stackedItem);
 
     this.score += 1;
+    this.playSuccessSfx();
     this.refreshScoreText();
     this.showFeedback("+1 caught", "#b3ffb3");
   }
@@ -964,7 +1076,7 @@ export class GameScene extends Phaser.Scene {
 
     this.balanceScale.rotation = 0;
     this.balanceScale.x = this.scaleXMid();
-    this.balanceScale.y = this.scale.height - 106;
+    this.balanceScale.y = this.scale.height - 88;
 
     this.feedbackText.setAlpha(0);
     this.gameOverTitle.setScale(1);
@@ -975,5 +1087,6 @@ export class GameScene extends Phaser.Scene {
 
     this.setPaused(false);
     this.setHudVisible(true);
+    this.startSoundtrackLoop();
   }
 }

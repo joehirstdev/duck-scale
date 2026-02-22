@@ -3,23 +3,26 @@ import { readLeaderboard } from "../game/leaderboard";
 import { RETRO_FONT } from "../game/constants";
 import { createRetroBackground, createRetroButton } from "../game/ui";
 
+const SOUNDTRACK_KEY = "soundtrack";
+
 export class MainMenuScene extends Phaser.Scene {
   constructor() {
     super("MainMenuScene");
   }
 
   preload(): void {
-    this.load.image("duck", "/assets/duck.png");
+    this.load.image("duck", "/assets/duck.webp");
     this.load.image("jam", "/assets/jam.webp");
   }
 
   create(): void {
     const width = this.scale.width;
     const height = this.scale.height;
+    this.sound.stopByKey(SOUNDTRACK_KEY);
 
     createRetroBackground(this, width, height);
 
-    const title = this.add.text(width * 0.5, height * 0.2, "JAM STACK", {
+    const title = this.add.text(width * 0.5, height * 0.2, "DUCK SCALE", {
       fontFamily: RETRO_FONT,
       fontSize: "54px",
       color: "#fff3ce",

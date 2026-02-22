@@ -3,18 +3,21 @@ import { RETRO_FONT } from "../game/constants";
 import { createRetroBackground, createRetroButton } from "../game/ui";
 import { readLeaderboard } from "../game/leaderboard";
 
+const SOUNDTRACK_KEY = "soundtrack";
+
 export class LeaderboardScene extends Phaser.Scene {
   constructor() {
     super("LeaderboardScene");
   }
 
   preload(): void {
-    this.load.image("duck", "/assets/duck.png");
+    this.load.image("duck", "/assets/duck.webp");
   }
 
   create(): void {
     const width = this.scale.width;
     const height = this.scale.height;
+    this.sound.stopByKey(SOUNDTRACK_KEY);
 
     createRetroBackground(this, width, height);
 
