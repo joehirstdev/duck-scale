@@ -220,6 +220,7 @@ export class GameScene extends Phaser.Scene {
         this.goToScene("MainMenuScene");
       }
 
+      this.drawWorld();
       return;
     }
 
