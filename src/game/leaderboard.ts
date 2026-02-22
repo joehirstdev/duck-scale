@@ -34,11 +34,7 @@ export const readLeaderboard = (): LeaderboardEntry[] => {
 };
 
 const writeLeaderboard = (entries: LeaderboardEntry[]): void => {
-  try {
-    localStorage.setItem(LEADERBOARD_STORAGE_KEY, JSON.stringify(entries));
-  } catch {
-    // Ignore storage errors; gameplay should continue.
-  }
+  localStorage.setItem(LEADERBOARD_STORAGE_KEY, JSON.stringify(entries));
 };
 
 export const addLeaderboardScore = (score: number): void => {

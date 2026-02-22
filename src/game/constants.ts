@@ -46,6 +46,33 @@ export const DEBRIS_GRAVITY = 0.42;
 export const DUCK_SIDE: Side = "left";
 export const JAM_SIDE: Side = "right";
 
+export const SCALE_BASELINE_OFFSET = 88;
+export const SOUNDTRACK_VOLUME = 0.35;
+export const QUACK_SFX_VOLUME = 0.12;
+export const GLASS_BREAK_SFX_VOLUME = 0.35;
+export const SUCCESS_SFX_VOLUME = 0.8;
+export const LOSE_SFX_VOLUME = 0.15;
+export const DIAL_MAX_NEEDLE_ANGLE = 0.72;
+export const DIAL_NEEDLE_LERP = 0.18;
+export const MAX_FRAME_DELTA_MS = 50;
+export const MAX_SPAWNS_PER_FRAME = 4;
+export const MAX_SPAWN_BACKLOG_INTERVALS = 2;
+export const FALLING_SPEED_MIN = 4.6;
+export const FALLING_SPEED_MAX = 7.8;
+export const FALLING_SPEED_BOOST_PER_SCORE = 0.02;
+export const FALLING_SPEED_BOOST_MAX = 3.4;
+export const DUCK_FALLING_ROTATION_MIN = -0.2;
+export const DUCK_FALLING_ROTATION_MAX = 0.2;
+export const JAM_FALLING_ROTATION_MIN = -0.14;
+export const JAM_FALLING_ROTATION_MAX = 0.14;
+export const STACKED_ROTATION_MIN = -0.14;
+export const STACKED_ROTATION_MAX = 0.14;
+export const CATCH_HORIZONTAL_WINDOW_RATIO = 0.9;
+export const CATCH_VERTICAL_WINDOW_MULTIPLIER = 2.4;
+export const CATCH_VERTICAL_WINDOW_MIN = 16;
+export const BALANCE_ROTATION_DIVISOR = 240;
+export const BALANCE_ROTATION_MAX = 0.36;
+
 export const RETRO_FONT = '"Courier New", monospace';
 export const RETRO_PALETTE = {
   skyTop: 0xf5b36a,

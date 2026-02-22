@@ -1,4 +1,5 @@
 import Phaser from "phaser";
+import "./style.css";
 import { GAME_HEIGHT, GAME_WIDTH } from "./game/constants";
 import { GameScene } from "./scenes/GameScene";
 import { LeaderboardScene } from "./scenes/LeaderboardScene";

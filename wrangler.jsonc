@@ -1,18 +1,18 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "duckscale",
+  "name": "duck-scale",
   "compatibility_date": "2026-02-22",
   "routes": [
     {
       "pattern": "duckscale.joehirst.dev",
-      "custom_domain": true
+      "custom_domain": true,
     },
     {
       "pattern": "www.duckscale.joehirst.dev",
-      "custom_domain": true
-    }
+      "custom_domain": true,
+    },
   ],
   "assets": {
-    "directory": "./dist"
-  }
+    "directory": "./dist",
+  },
 }

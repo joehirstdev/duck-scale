@@ -1,12 +1,28 @@
 {
-  "name": "game-jam-2026",
+  "name": "duck-scale",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc && vite build",
-    "lint": "eslint .",
-    "dev": "vite"
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "preview:cf": "wrangler dev",
+    "prepare": "husky",
+    "typecheck": "tsc --noEmit",
+    "lint-staged": "lint-staged",
+    "lint": "prettier --check . && eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write ."
+  },
+  "lint-staged": {
+    "*.{js,ts,svelte}": [
+      "prettier --write",
+      "eslint"
+    ],
+    "*.{json,md,css}": [
+      "prettier --write"
+    ]
   },
   "dependencies": {
     "phaser": "^3.90.0"
@@ -16,9 +32,12 @@
     "eslint": "^9.21.0",
     "eslint-config-prettier": "^10.1.2",
     "eslint-plugin-prettier": "^5.2.6",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.1",
     "prettier": "^3.5.3",
     "typescript": "~5.7.3",
     "typescript-eslint": "^8.25.0",
-    "vite": "^6.2.0"
+    "vite": "^6.2.0",
+    "wrangler": "^4.67.0"
   }
 }

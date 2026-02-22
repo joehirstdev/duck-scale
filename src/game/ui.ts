@@ -12,8 +12,6 @@ const SUN_X_RATIO = 0.76;
 const MOON_X_RATIO = 0.74;
 const CELESTIAL_DRIFT_RATIO = 0.065;
 
-let hasAppliedFirstStartOffset = false;
-
 const NIGHT_PALETTE = {
   skyTop: 0x102455,
   skyBottom: 0x1a1039,
@@ -32,6 +30,9 @@ const lerp = (from: number, to: number, amount: number): number =>
 const easeInOutSine = (value: number): number =>
   0.5 - 0.5 * Math.cos(Math.PI * clamp01(value));
 
+const currentSkyTimeMs = (): number =>
+  performance.now() + FIRST_START_OFFSET_MS;
+
 const mixColor = (from: number, to: number, amount: number): number => {
   const red = Math.round(lerp((from >> 16) & 0xff, (to >> 16) & 0xff, amount));
   const green = Math.round(lerp((from >> 8) & 0xff, (to >> 8) & 0xff, amount));
@@ -43,7 +44,7 @@ export const drawRetroBackground = (
   graphics: Phaser.GameObjects.Graphics,
   width: number,
   height: number,
-  timeMs = performance.now(),
+  timeMs = currentSkyTimeMs(),
 ): void => {
   const phase =
     ((timeMs % DAY_NIGHT_CYCLE_MS) / DAY_NIGHT_CYCLE_MS +
@@ -200,27 +201,18 @@ export const drawRetroBackground = (
 
 export const createRetroBackground = (
   scene: Phaser.Scene,
-  _width?: number,
-  _height?: number,
+  // _width?: number,
+  // _height?: number,
 ): void => {
-  void _width;
-  void _height;
+  // void _width;
+  // void _height;
 
   const bg = scene.add.graphics();
   bg.setDepth(-1);
-  const cycleStartOffsetMs = hasAppliedFirstStartOffset
-    ? 0
-    : FIRST_START_OFFSET_MS;
-  hasAppliedFirstStartOffset = true;
 
   const redraw = (): void => {
     bg.clear();
-    drawRetroBackground(
-      bg,
-      scene.scale.width,
-      scene.scale.height,
-      scene.time.now + cycleStartOffsetMs,
-    );
+    drawRetroBackground(bg, scene.scale.width, scene.scale.height);
   };
 
   redraw();

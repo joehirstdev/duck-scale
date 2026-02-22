@@ -1,50 +1,66 @@
 import Phaser from "phaser";
 import { addLeaderboardScore, readLeaderboard } from "../game/leaderboard";
 import {
-  BASE_SPAWN_INTERVAL_MS,
-  BURST_SPAWN_BASE_CHANCE,
-  BURST_SPAWN_MAX_CHANCE,
-  BURST_SPAWN_SCORE_FACTOR,
+  BALANCE_ROTATION_DIVISOR,
+  BALANCE_ROTATION_MAX,
   DEATH_FLIGHT_GRAVITY,
   DEATH_SPIN_SPEED,
   DEATH_SPIN_TOTAL,
   DEBRIS_GRAVITY,
-  FALLING_ITEM_MAX_SIZE,
-  FALLING_ITEM_MIN_SIZE,
+  DIAL_MAX_NEEDLE_ANGLE,
+  DIAL_NEEDLE_LERP,
   FEEDBACK_DURATION_MS,
+  GLASS_BREAK_SFX_VOLUME,
+  LOSE_SFX_VOLUME,
   MAX_WEIGHT_IMBALANCE,
-  MIN_SPAWN_INTERVAL_MS,
+  MAX_FRAME_DELTA_MS,
+  MAX_SPAWN_BACKLOG_INTERVALS,
+  MAX_SPAWNS_PER_FRAME,
   PAN_OFFSET,
   PAN_RADIUS,
   PLAYER_SPEED,
+  QUACK_SFX_VOLUME,
   RETRO_FONT,
-  RETRO_PALETTE,
-  SPAWN_RAMP_PER_SCORE_MS,
-  STACK_COMPRESSION,
+  SCALE_BASELINE_OFFSET,
+  SOUNDTRACK_VOLUME,
+  SUCCESS_SFX_VOLUME,
   clamp,
   expectedSideForShape,
   randomBetween,
   type FallingItem,
   type LooseBlock,
-  type ShapeKind,
   type Side,
   type StackedItem,
 } from "../game/constants";
-import { drawRetroBackground } from "../game/ui";
+import {
+  burstChanceForScore,
+  clearFallingItems,
+  createFallingItem,
+  getLandingWorldPosition,
+  getStackHeight,
+  getWeightDelta,
+  getWeightImbalance,
+  panXForSide,
+  pushForSide,
+  randomStackedRotation,
+  removeFallingItemAt,
+  spawnIntervalForScore,
+  stackForSide,
+  tryCatchItem,
+} from "../game/gameplay";
+import {
+  createGameOverUi,
+  createPauseUi,
+  createScale,
+  drawWorld,
+  localToWorld,
+} from "../game/gameView";
 
 const SOUNDTRACK_KEY = "soundtrack";
 const QUACK_SFX_KEY = "quackSfx";
 const GLASS_BREAK_SFX_KEY = "glassBreakSfx";
 const SUCCESS_SFX_KEY = "successSfx";
 const LOSE_SFX_KEY = "loseSfx";
-const SCALE_BASELINE_OFFSET = 88;
-const SOUNDTRACK_VOLUME = 0.35;
-const QUACK_SFX_VOLUME = 0.12;
-const GLASS_BREAK_SFX_VOLUME = 0.35;
-const SUCCESS_SFX_VOLUME = 0.8;
-const LOSE_SFX_VOLUME = 0.15;
-const DIAL_MAX_NEEDLE_ANGLE = 0.72;
-const DIAL_NEEDLE_LERP = 0.18;
 
 export class GameScene extends Phaser.Scene {
   private background!: Phaser.GameObjects.Graphics;
@@ -119,29 +135,14 @@ export class GameScene extends Phaser.Scene {
     this.background = this.add.graphics();
     this.lanes = this.add.graphics();
     this.itemLayer = this.add.container();
-    this.balanceScale = this.createScale();
+
+    const { balanceScale, balanceDialNeedle } = createScale(this);
+    this.balanceScale = balanceScale;
+    this.balanceDialNeedle = balanceDialNeedle;
 
     this.stackLayer = this.add.container();
     this.balanceScale.add(this.stackLayer);
-
     this.debrisLayer = this.add.container();
-
-    const labelStyle: Phaser.Types.GameObjects.Text.TextStyle = {
-      fontFamily: RETRO_FONT,
-      fontSize: "20px",
-      color: "#fff2cd",
-      stroke: "#2f1a1b",
-      strokeThickness: 4,
-      fontStyle: "bold",
-    };
-
-    const leftLabel = this.add.text(-PAN_OFFSET, -46, "DUCKS", labelStyle);
-    leftLabel.setOrigin(0.5);
-    this.balanceScale.add(leftLabel);
-
-    const rightLabel = this.add.text(PAN_OFFSET, -46, "JAM", labelStyle);
-    rightLabel.setOrigin(0.5);
-    this.balanceScale.add(rightLabel);
 
     this.scoreText = this.add.text(0, 20, "", {
       fontFamily: RETRO_FONT,
@@ -165,9 +166,21 @@ export class GameScene extends Phaser.Scene {
     this.feedbackText.setOrigin(0.5);
     this.feedbackText.setAlpha(0);
 
-    this.createGameOverUi();
+    const gameOver = createGameOverUi(this);
+    this.gameOverUi = gameOver.container;
+    this.gameOverTitle = gameOver.title;
+    this.gameOverScore = gameOver.score;
+    this.gameOverBadge = gameOver.badge;
+    this.gameOverRetryText = gameOver.retryText;
+    this.gameOverMenuText = gameOver.menuText;
+    this.gameOverLeaderboardText = gameOver.leaderboardText;
 
-    this.createPauseUi();
+    const pause = createPauseUi(this);
+    this.pauseUi = pause.container;
+    this.pauseBackdrop = pause.backdrop;
+    this.pauseTitle = pause.title;
+    this.pauseResumeText = pause.resumeText;
+    this.pauseMenuText = pause.menuText;
 
     const keyboard = this.input.keyboard;
     if (!keyboard) {
@@ -195,7 +208,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, deltaMs: number): void {
-    const deltaTime = deltaMs / 16.6666667;
+    const cappedDeltaMs = Math.min(deltaMs, MAX_FRAME_DELTA_MS);
+    const deltaTime = cappedDeltaMs / 16.6666667;
 
     this.layout(false);
 
@@ -250,66 +264,14 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (!this.isGameOver) {
-      const moveLeft =
-        this.cursors.left.isDown || this.keyA.isDown || this.keyH.isDown;
-      const moveRight =
-        this.cursors.right.isDown || this.keyD.isDown || this.keyL.isDown;
-      const inputDirection = Number(moveRight) - Number(moveLeft);
+      this.updateScaleMovement(deltaTime);
+      this.updateSpawner(cappedDeltaMs);
+      this.updateFallingItems(deltaTime);
 
-      this.balanceScale.x += inputDirection * PLAYER_SPEED * deltaTime;
-      this.balanceScale.x = clamp(
-        this.balanceScale.x,
-        this.minScaleX(),
-        this.maxScaleX(),
-      );
-
-      this.spawnTimerMs += deltaMs;
-      const spawnInterval = this.spawnIntervalForScore(this.score);
-      while (this.spawnTimerMs >= spawnInterval) {
-        this.spawnTimerMs -= spawnInterval;
-        this.spawnItem();
-        if (Math.random() < this.burstChanceForScore(this.score)) {
-          this.spawnItem();
-        }
-      }
-
-      for (let index = this.fallingItems.length - 1; index >= 0; index -= 1) {
-        const item = this.fallingItems[index];
-        item.sprite.y += item.speed * deltaTime;
-
-        const caughtSide = this.tryCatchItem(item, deltaTime);
-        if (caughtSide) {
-          const expectedSide = expectedSideForShape(item.kind);
-          if (caughtSide === expectedSide) {
-            this.removeFallingItemAt(index);
-            this.addItemToStack(caughtSide, item);
-          } else {
-            const knocked = this.knockTopItemFromStack(caughtSide);
-            if (knocked) {
-              this.playSfx(
-                caughtSide === "left" ? QUACK_SFX_KEY : GLASS_BREAK_SFX_KEY,
-                caughtSide === "left"
-                  ? QUACK_SFX_VOLUME
-                  : GLASS_BREAK_SFX_VOLUME,
-              );
-              this.removeFallingItemAt(index); // make this spin with animation
-              this.showFeedback("Wrong side!", "#ff9e80");
-            }
-          }
-
-          if (this.isGameOver) {
-            break;
-          }
-
-          continue;
-        }
-
-        if (item.sprite.y - item.size > this.scale.height) {
-          this.removeFallingItemAt(index);
-        }
-      }
-
-      if (this.getWeightImbalance() > MAX_WEIGHT_IMBALANCE) {
+      if (
+        getWeightImbalance(this.leftStack, this.rightStack) >
+        MAX_WEIGHT_IMBALANCE
+      ) {
         this.triggerDeath();
       }
     } else {
@@ -320,32 +282,136 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (this.deathSequenceActive) {
-      if (this.deathSpinRemaining > 0) {
-        const spinStep = Math.min(
-          this.deathSpinRemaining,
-          DEATH_SPIN_SPEED * deltaTime,
-        );
-        this.balanceScale.rotation += spinStep * this.deathTipDirection;
-        this.deathSpinRemaining -= spinStep;
-      } else {
-        if (!this.deathFlightActive) {
-          this.deathFlightActive = true;
-          this.deathFlightVx = this.deathTipDirection * randomBetween(14, 20);
-          this.deathFlightVy = randomBetween(-16, -11);
-        }
-
-        this.balanceScale.x += this.deathFlightVx * deltaTime;
-        this.balanceScale.y += this.deathFlightVy * deltaTime;
-        this.deathFlightVy += DEATH_FLIGHT_GRAVITY * deltaTime;
-        this.balanceScale.rotation += this.deathTipDirection * 0.32 * deltaTime;
-      }
+      this.updateDeathSequence(deltaTime);
     } else {
-      const targetRotation = clamp(this.getWeightDelta() / 240, -0.36, 0.36);
+      const weightDelta = getWeightDelta(this.leftStack, this.rightStack);
+      const targetRotation = clamp(
+        weightDelta / BALANCE_ROTATION_DIVISOR,
+        -BALANCE_ROTATION_MAX,
+        BALANCE_ROTATION_MAX,
+      );
       const rotationLerp = Math.min(1, 0.14 * deltaTime);
       this.balanceScale.rotation +=
         (targetRotation - this.balanceScale.rotation) * rotationLerp;
     }
 
+    this.updateLooseBlocks(deltaTime);
+
+    if (this.feedbackTimerMs > 0) {
+      this.feedbackTimerMs -= cappedDeltaMs;
+      this.feedbackText.setAlpha(
+        clamp(this.feedbackTimerMs / FEEDBACK_DURATION_MS, 0, 1),
+      );
+    }
+
+    this.updateBalanceDial(deltaTime);
+    this.drawWorld();
+  }
+
+  private updateScaleMovement(deltaTime: number): void {
+    const moveLeft =
+      this.cursors.left.isDown || this.keyA.isDown || this.keyH.isDown;
+    const moveRight =
+      this.cursors.right.isDown || this.keyD.isDown || this.keyL.isDown;
+    const inputDirection = Number(moveRight) - Number(moveLeft);
+
+    this.balanceScale.x += inputDirection * PLAYER_SPEED * deltaTime;
+    this.balanceScale.x = clamp(
+      this.balanceScale.x,
+      this.minScaleX(),
+      this.maxScaleX(),
+    );
+  }
+
+  private updateSpawner(cappedDeltaMs: number): void {
+    const spawnInterval = spawnIntervalForScore(this.score);
+    const maxBacklogMs = spawnInterval * MAX_SPAWN_BACKLOG_INTERVALS;
+    this.spawnTimerMs = Math.min(
+      this.spawnTimerMs + cappedDeltaMs,
+      maxBacklogMs,
+    );
+
+    let spawnsThisFrame = 0;
+    while (
+      this.spawnTimerMs >= spawnInterval &&
+      spawnsThisFrame < MAX_SPAWNS_PER_FRAME
+    ) {
+      this.spawnTimerMs -= spawnInterval;
+      this.fallingItems.push(
+        createFallingItem(this, this.itemLayer, this.score),
+      );
+      spawnsThisFrame += 1;
+
+      if (
+        spawnsThisFrame < MAX_SPAWNS_PER_FRAME &&
+        Math.random() < burstChanceForScore(this.score)
+      ) {
+        this.fallingItems.push(
+          createFallingItem(this, this.itemLayer, this.score),
+        );
+        spawnsThisFrame += 1;
+      }
+    }
+  }
+
+  private updateFallingItems(deltaTime: number): void {
+    for (let index = this.fallingItems.length - 1; index >= 0; index -= 1) {
+      const item = this.fallingItems[index];
+      item.sprite.y += item.speed * deltaTime;
+
+      const leftLanding = getLandingWorldPosition(
+        "left",
+        item.size,
+        this.leftStack,
+        this.rightStack,
+        (localX, localY) => localToWorld(this.balanceScale, localX, localY),
+      );
+      const rightLanding = getLandingWorldPosition(
+        "right",
+        item.size,
+        this.leftStack,
+        this.rightStack,
+        (localX, localY) => localToWorld(this.balanceScale, localX, localY),
+      );
+
+      const caughtSide = tryCatchItem(
+        item,
+        deltaTime,
+        leftLanding,
+        rightLanding,
+      );
+      if (caughtSide) {
+        const expectedSide = expectedSideForShape(item.kind);
+        if (caughtSide === expectedSide) {
+          removeFallingItemAt(this.fallingItems, index);
+          this.addItemToStack(caughtSide, item);
+        } else {
+          const knocked = this.knockTopItemFromStack(caughtSide);
+          if (knocked) {
+            if (caughtSide === "left") {
+              this.playSfx(QUACK_SFX_KEY, QUACK_SFX_VOLUME);
+            } else {
+              this.playSfx(GLASS_BREAK_SFX_KEY, GLASS_BREAK_SFX_VOLUME);
+            }
+            removeFallingItemAt(this.fallingItems, index);
+            this.showFeedback("Wrong side!", "#ff9e80");
+          }
+        }
+
+        if (this.isGameOver) {
+          break;
+        }
+
+        continue;
+      }
+
+      if (item.sprite.y - item.size > this.scale.height) {
+        removeFallingItemAt(this.fallingItems, index);
+      }
+    }
+  }
+
+  private updateLooseBlocks(deltaTime: number): void {
     for (let index = this.looseBlocks.length - 1; index >= 0; index -= 1) {
       const block = this.looseBlocks[index];
       block.vy += DEBRIS_GRAVITY * deltaTime;
@@ -359,130 +425,14 @@ export class GameScene extends Phaser.Scene {
         this.looseBlocks.splice(index, 1);
       }
     }
-
-    if (this.feedbackTimerMs > 0) {
-      this.feedbackTimerMs -= deltaMs;
-      this.feedbackText.setAlpha(
-        clamp(this.feedbackTimerMs / FEEDBACK_DURATION_MS, 0, 1),
-      );
-    }
-
-    this.updateBalanceDial(deltaTime);
-    this.drawWorld();
-  }
-
-  private createScale(): Phaser.GameObjects.Container {
-    const scale = this.add.container(0, 0);
-
-    const beam = this.add.graphics();
-    beam.fillStyle(0xffd992).fillRoundedRect(-128, -20, 256, 10, 6);
-    beam.lineStyle(2, 0x8d5b3d).strokeRoundedRect(-128, -20, 256, 10, 6);
-    scale.add(beam);
-
-    const support = this.add.graphics();
-    support.fillStyle(0xf6c776).fillRoundedRect(-14, -20, 28, 66, 8);
-    support.fillStyle(0xf6c776).fillRect(-4, -50, 8, 30);
-    support.fillStyle(0x5f324d).fillRoundedRect(-56, 42, 112, 18, 8);
-    support.lineStyle(2, 0x30172a).strokeRoundedRect(-56, 42, 112, 18, 8);
-    scale.add(support);
-
-    const leftArm = this.add.graphics();
-    leftArm.fillStyle(0xf0be7a).fillRect(-PAN_OFFSET, -15, 3, 26);
-    scale.add(leftArm);
-
-    const rightArm = this.add.graphics();
-    rightArm.fillStyle(0xf0be7a).fillRect(PAN_OFFSET - 3, -15, 3, 26);
-    scale.add(rightArm);
-
-    scale.add(this.createBalanceDial());
-    scale.add(this.createPan(-PAN_OFFSET, 0xffd789));
-    scale.add(this.createPan(PAN_OFFSET, 0xff8c74));
-
-    return scale;
-  }
-
-  private createBalanceDial(): Phaser.GameObjects.Container {
-    const dial = this.add.container(0, -6);
-    const radius = 18;
-    const start = Math.PI * 0.25;
-    const end = Math.PI * 0.75;
-
-    const face = this.add.graphics();
-    face.fillStyle(0xfff3d4, 0.93);
-    face.beginPath();
-    face.moveTo(0, 0);
-    face.arc(0, 0, radius, start, end, false);
-    face.closePath();
-    face.fillPath();
-    face.lineStyle(2, 0x5e3a2f, 1);
-    face.beginPath();
-    face.arc(0, 0, radius, start, end, false);
-    face.strokePath();
-
-    const ticks = this.add.graphics();
-    ticks.lineStyle(1, 0x9f6b53, 0.95);
-    for (const angle of [0.25, 0.375, 0.5, 0.625, 0.75]) {
-      const radians = angle * Math.PI;
-      const inner = radius - 5;
-      const outer = radius - 1;
-      ticks.lineBetween(
-        Math.cos(radians) * inner,
-        Math.sin(radians) * inner,
-        Math.cos(radians) * outer,
-        Math.sin(radians) * outer,
-      );
-    }
-
-    this.balanceDialNeedle = this.add.graphics();
-    this.balanceDialNeedle.lineStyle(3, 0xd54f45, 1);
-    this.balanceDialNeedle.lineBetween(0, 0, 0, 14);
-    this.balanceDialNeedle.fillStyle(0x632d26, 1).fillCircle(0, 0, 3);
-
-    dial.add(face);
-    dial.add(ticks);
-    dial.add(this.balanceDialNeedle);
-
-    return dial;
-  }
-
-  private createPan(x: number, color: number): Phaser.GameObjects.Graphics {
-    const pan = this.add.graphics();
-    const trayWidth = PAN_RADIUS * 2.05;
-    const trayHeight = Math.max(16, PAN_RADIUS * 0.52);
-
-    pan
-      .fillStyle(0xfff1cf, 0.97)
-      .fillRoundedRect(
-        x - trayWidth * 0.5,
-        10 - trayHeight * 0.5,
-        trayWidth,
-        trayHeight,
-        8,
-      )
-      .lineStyle(4, color)
-      .strokeRoundedRect(
-        x - trayWidth * 0.5,
-        10 - trayHeight * 0.5,
-        trayWidth,
-        trayHeight,
-        8,
-      );
-
-    pan.fillStyle(0xf7d5a3, 0.82);
-    pan.fillRect(x - trayWidth * 0.34, 7.5, trayWidth * 0.68, 5);
-
-    return pan;
   }
 
   private scaleHalfWidth(): number {
-    // Pan tray is the widest part of the scale.
     const trayHalfWidth = PAN_RADIUS * 1.025 + 2;
     return PAN_OFFSET + trayHalfWidth;
   }
 
   private edgeOverlapAllowance(): number {
-    // Allow half of the full scale width to overlap the wall.
-    // `scaleHalfWidth()` is already half-width, so allowance equals it.
     return this.scaleHalfWidth();
   }
 
@@ -498,32 +448,6 @@ export class GameScene extends Phaser.Scene {
 
   private scaleXMid(): number {
     return this.scale.width * 0.5;
-  }
-
-  private stackForSide(side: Side): StackedItem[] {
-    return side === "left" ? this.leftStack : this.rightStack;
-  }
-
-  private panXForSide(side: Side): number {
-    return side === "left" ? -PAN_OFFSET : PAN_OFFSET;
-  }
-
-  private pushForSide(side: Side): number {
-    return side === "left" ? -1 : 1;
-  }
-
-  private spawnIntervalForScore(value: number): number {
-    return Math.max(
-      MIN_SPAWN_INTERVAL_MS,
-      BASE_SPAWN_INTERVAL_MS - value * SPAWN_RAMP_PER_SCORE_MS,
-    );
-  }
-
-  private burstChanceForScore(value: number): number {
-    return Math.min(
-      BURST_SPAWN_MAX_CHANCE,
-      BURST_SPAWN_BASE_CHANCE + value * BURST_SPAWN_SCORE_FACTOR,
-    );
   }
 
   private layout(force: boolean): void {
@@ -548,7 +472,7 @@ export class GameScene extends Phaser.Scene {
     this.feedbackText.setPosition(width * 0.5, height * 0.22);
     this.gameOverTitle.setPosition(width * 0.5, height * 0.35);
     this.gameOverScore.setPosition(width * 0.5, height * 0.5);
-    this.gameOverBadge.setPosition(width * 0.5, height * 0.54);
+    this.gameOverBadge.setPosition(width * 0.5, height * 0.56);
     this.gameOverRetryText.setPosition(width * 0.5, height * 0.62);
     this.gameOverMenuText.setPosition(width * 0.5, height * 0.69);
     this.gameOverLeaderboardText.setPosition(width * 0.5, height * 0.76);
@@ -561,22 +485,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   private drawWorld(): void {
-    const width = this.scale.width;
-    const height = this.scale.height;
-
-    this.background.clear();
-    drawRetroBackground(this.background, width, height);
-
-    this.lanes.clear();
-    const leftPan = this.getPanWorldPosition("left");
-    const rightPan = this.getPanWorldPosition("right");
-
-    this.lanes
-      .fillStyle(RETRO_PALETTE.laneDuck, 0.15)
-      .fillRect(leftPan.x - PAN_RADIUS, 0, PAN_RADIUS * 2, height);
-    this.lanes
-      .fillStyle(RETRO_PALETTE.laneJam, 0.15)
-      .fillRect(rightPan.x - PAN_RADIUS, 0, PAN_RADIUS * 2, height);
+    drawWorld(this, this.background, this.lanes, this.balanceScale);
   }
 
   private showFeedback(message: string, colorHex: string): void {
@@ -590,153 +499,12 @@ export class GameScene extends Phaser.Scene {
     this.scoreText.setText(`Score: ${this.score}`);
   }
 
-  private createGameOverUi(): void {
-    this.gameOverTitle = this.add.text(0, 0, "GAME OVER", {
-      fontFamily: RETRO_FONT,
-      fontSize: "64px",
-      color: "#ff6a74",
-      stroke: "#220b11",
-      strokeThickness: 7,
-      fontStyle: "bold",
-    });
-    this.gameOverTitle.setOrigin(0.5);
-
-    this.gameOverScore = this.add.text(0, 0, "Score: 0", {
-      fontFamily: RETRO_FONT,
-      fontSize: "34px",
-      color: "#ffe39f",
-      stroke: "#1f1018",
-      strokeThickness: 5,
-      fontStyle: "bold",
-    });
-    this.gameOverScore.setOrigin(0.5);
-
-    this.gameOverBadge = this.add.text(0, 0, "NEW HIGH SCORE!", {
-      fontFamily: RETRO_FONT,
-      fontSize: "30px",
-      color: "#ff77ce",
-      stroke: "#2b1030",
-      strokeThickness: 5,
-      fontStyle: "bold",
-    });
-    this.gameOverBadge.setOrigin(0.5);
-    this.gameOverBadge.setVisible(false);
-
-    this.gameOverRetryText = this.add.text(0, 0, "Press SPACE to retry", {
-      fontFamily: RETRO_FONT,
-      fontSize: "24px",
-      color: "#fff4df",
-      stroke: "#1c111a",
-      strokeThickness: 4,
-    });
-    this.gameOverRetryText.setOrigin(0.5);
-
-    this.gameOverMenuText = this.add.text(0, 0, "Press M for main menu", {
-      fontFamily: RETRO_FONT,
-      fontSize: "24px",
-      color: "#fff4df",
-      stroke: "#1c111a",
-      strokeThickness: 4,
-    });
-    this.gameOverMenuText.setOrigin(0.5);
-
-    this.gameOverLeaderboardText = this.add.text(
-      0,
-      0,
-      "Press L to view leaderboard",
-      {
-        fontFamily: RETRO_FONT,
-        fontSize: "24px",
-        color: "#fff4df",
-        stroke: "#1c111a",
-        strokeThickness: 4,
-      },
-    );
-    this.gameOverLeaderboardText.setOrigin(0.5);
-
-    this.gameOverUi = this.add.container(0, 0, [
-      this.gameOverTitle,
-      this.gameOverScore,
-      this.gameOverBadge,
-      this.gameOverRetryText,
-      this.gameOverMenuText,
-      this.gameOverLeaderboardText,
-    ]);
-    this.gameOverUi.setDepth(2100);
-    this.gameOverUi.setVisible(false);
-  }
-
-  private createPauseUi(): void {
-    this.pauseBackdrop = this.add.rectangle(
-      0,
-      0,
-      this.scale.width,
-      this.scale.height,
-      0x000000,
-      0.62,
-    );
-    this.pauseBackdrop.setOrigin(0, 0);
-
-    this.pauseTitle = this.add.text(0, 0, "GAME PAUSED", {
-      fontFamily: RETRO_FONT,
-      fontSize: "64px",
-      color: "#ffe39d",
-      stroke: "#2a1618",
-      strokeThickness: 7,
-      fontStyle: "bold",
-    });
-    this.pauseTitle.setOrigin(0.5);
-
-    this.pauseResumeText = this.add.text(
-      0,
-      0,
-      "Press SPACE or ESC to continue",
-      {
-        fontFamily: RETRO_FONT,
-        fontSize: "24px",
-        color: "#fff4de",
-        stroke: "#24151b",
-        strokeThickness: 5,
-      },
-    );
-    this.pauseResumeText.setOrigin(0.5);
-
-    this.pauseMenuText = this.add.text(0, 0, "Press M for main menu", {
-      fontFamily: RETRO_FONT,
-      fontSize: "24px",
-      color: "#fff4de",
-      stroke: "#24151b",
-      strokeThickness: 5,
-    });
-    this.pauseMenuText.setOrigin(0.5);
-
-    this.pauseUi = this.add.container(0, 0, [
-      this.pauseBackdrop,
-      this.pauseTitle,
-      this.pauseResumeText,
-      this.pauseMenuText,
-    ]);
-    this.pauseUi.setDepth(2000);
-    this.pauseUi.setVisible(false);
-  }
-
   private setPaused(paused: boolean, manageSound = true): void {
     this.isPaused = paused;
     this.pauseUi.setVisible(paused);
 
-    if (!manageSound) {
-      return;
-    }
-
-    const soundtrack = this.sound.get(SOUNDTRACK_KEY);
-    if (!soundtrack) {
-      return;
-    }
-
-    if (paused) {
-      soundtrack.pause();
-    } else {
-      soundtrack.resume();
+    if (manageSound) {
+      this.setSoundtrackPaused(paused);
     }
   }
 
@@ -770,138 +538,105 @@ export class GameScene extends Phaser.Scene {
     this.sound.stopByKey(SOUNDTRACK_KEY);
   }
 
+  private setSoundtrackPaused(paused: boolean): void {
+    const soundtrack = this.sound.get(SOUNDTRACK_KEY);
+    if (!soundtrack) {
+      return;
+    }
+
+    if (paused) {
+      soundtrack.pause();
+    } else {
+      soundtrack.resume();
+    }
+  }
+
   private playSfx(key: string, volume: number): void {
     if (this.sound.locked) {
       return;
     }
 
-    this.sound.play(key, {
-      volume,
-    });
-  }
-
-  private localToWorld(
-    localX: number,
-    localY: number,
-  ): { x: number; y: number } {
-    const cos = Math.cos(this.balanceScale.rotation);
-    const sin = Math.sin(this.balanceScale.rotation);
-
-    return {
-      x: this.balanceScale.x + localX * cos - localY * sin,
-      y: this.balanceScale.y + localX * sin + localY * cos,
-    };
-  }
-
-  private getPanWorldPosition(side: Side): { x: number; y: number } {
-    return this.localToWorld(this.panXForSide(side), 10);
-  }
-
-  private removeFallingItemAt(index: number): void {
-    const item = this.fallingItems[index];
-    item.sprite.destroy();
-    this.fallingItems.splice(index, 1);
-  }
-
-  private clearFallingItems(): void {
-    for (let index = this.fallingItems.length - 1; index >= 0; index -= 1) {
-      this.removeFallingItemAt(index);
-    }
-  }
-
-  private getStackHeight(stack: StackedItem[]): number {
-    return stack.reduce(
-      (height, stacked) => height + stacked.size * STACK_COMPRESSION + 2,
-      0,
-    );
-  }
-
-  private getStackWeight(stack: StackedItem[]): number {
-    return stack.reduce((weight, stacked) => weight + stacked.size, 0);
-  }
-
-  private getWeightDelta(): number {
-    return (
-      this.getStackWeight(this.rightStack) - this.getStackWeight(this.leftStack)
-    );
-  }
-
-  private getWeightImbalance(): number {
-    return Math.abs(this.getWeightDelta());
+    this.sound.play(key, { volume });
   }
 
   private updateBalanceDial(deltaTime: number): void {
+    const weightDelta = getWeightDelta(this.leftStack, this.rightStack);
     const targetNeedleRotation =
-      -clamp(this.getWeightDelta() / MAX_WEIGHT_IMBALANCE, -1, 1) *
-      DIAL_MAX_NEEDLE_ANGLE;
-    const lerp = Math.min(1, DIAL_NEEDLE_LERP * deltaTime);
+      -clamp(weightDelta / MAX_WEIGHT_IMBALANCE, -1, 1) * DIAL_MAX_NEEDLE_ANGLE;
+    const lerpFactor = Math.min(1, DIAL_NEEDLE_LERP * deltaTime);
     this.balanceDialNeedle.rotation +=
-      (targetNeedleRotation - this.balanceDialNeedle.rotation) * lerp;
+      (targetNeedleRotation - this.balanceDialNeedle.rotation) * lerpFactor;
   }
 
-  private getLandingWorldPosition(
-    side: Side,
-    incomingSize: number,
-  ): { x: number; y: number } {
-    const stack = this.stackForSide(side);
-    const localPanX = this.panXForSide(side);
-    const stackHeight = this.getStackHeight(stack);
-    const landingLocalY = 10 - PAN_RADIUS - incomingSize * 0.5 - stackHeight;
-    return this.localToWorld(localPanX, landingLocalY);
-  }
+  private addItemToStack(side: Side, item: FallingItem): void {
+    const stack = stackForSide(side, this.leftStack, this.rightStack);
+    const localPanX = panXForSide(side);
+    const stackHeight = getStackHeight(stack);
 
-  private createShapeSprite(
-    kind: ShapeKind,
-    size: number,
-  ): Phaser.GameObjects.Image {
-    const sprite = this.add.image(0, 0, kind);
+    const sprite = this.add.image(0, 0, item.kind);
     sprite.setOrigin(0.5);
-
     const longestSide = Math.max(sprite.width || 1, sprite.height || 1);
-    sprite.setScale(size / longestSide);
-
-    if (kind === "duck") {
+    sprite.setScale(item.size / longestSide);
+    if (item.kind === "duck") {
       sprite.setFlipX(Math.random() < 0.5);
-      sprite.rotation = randomBetween(-0.2, 0.2);
-    } else {
-      sprite.rotation = randomBetween(-0.14, 0.14);
+    }
+    sprite.rotation = randomStackedRotation();
+
+    sprite.setPosition(
+      localPanX + randomBetween(-PAN_RADIUS * 0.35, PAN_RADIUS * 0.35),
+      10 - PAN_RADIUS - item.size * 0.5 - stackHeight,
+    );
+
+    this.stackLayer.add(sprite);
+
+    stack.push({
+      sprite,
+      size: item.size,
+    });
+
+    this.score += 1;
+    this.playSfx(SUCCESS_SFX_KEY, SUCCESS_SFX_VOLUME);
+    this.refreshScoreText();
+    this.showFeedback("+1 caught", "#b3ffb3");
+  }
+
+  private knockTopItemFromStack(side: Side): boolean {
+    const stack = stackForSide(side, this.leftStack, this.rightStack);
+    const removed = stack.pop();
+    if (!removed) {
+      return false;
     }
 
-    return sprite;
-  }
-
-  private createFallingItem(): FallingItem {
-    const size = randomBetween(FALLING_ITEM_MIN_SIZE, FALLING_ITEM_MAX_SIZE);
-    const kind: ShapeKind = Math.random() < 0.5 ? "duck" : "jam";
-    const speedBoost = Math.min(this.score * 0.02, 3.4);
-    const speed = randomBetween(4.6, 7.8) + speedBoost;
-
-    const sprite = this.createShapeSprite(kind, size);
-    sprite.x = randomBetween(
-      size * 0.5 + 10,
-      this.scale.width - size * 0.5 - 10,
+    const world = localToWorld(
+      this.balanceScale,
+      removed.sprite.x,
+      removed.sprite.y,
     );
-    sprite.y = -size;
+    const worldRotation = this.balanceScale.rotation + removed.sprite.rotation;
 
-    this.itemLayer.add(sprite);
+    this.stackLayer.remove(removed.sprite);
+    removed.sprite.x = world.x;
+    removed.sprite.y = world.y;
+    removed.sprite.rotation = worldRotation;
+    this.debrisLayer.add(removed.sprite);
 
-    return {
-      sprite,
-      kind,
-      size,
-      speed,
-    };
-  }
+    const sidePush = pushForSide(side);
+    this.looseBlocks.push({
+      sprite: removed.sprite,
+      vx: sidePush * randomBetween(3.6, 6.8),
+      vy: randomBetween(-6.4, -3.2),
+      spin: randomBetween(-0.18, 0.18),
+    });
 
-  private spawnItem(): void {
-    const item = this.createFallingItem();
-    this.fallingItems.push(item);
+    this.score = Math.max(0, this.score - 1);
+    this.refreshScoreText();
+    return true;
   }
 
   private spillStacksOnDeath(): void {
     const spillSide = (side: Side): void => {
-      const stack = this.stackForSide(side);
-      const sidePush = this.pushForSide(side);
+      const stack = stackForSide(side, this.leftStack, this.rightStack);
+      const sidePush = pushForSide(side);
 
       while (stack.length > 0) {
         const item = stack.pop();
@@ -909,7 +644,11 @@ export class GameScene extends Phaser.Scene {
           break;
         }
 
-        const world = this.localToWorld(item.sprite.x, item.sprite.y);
+        const world = localToWorld(
+          this.balanceScale,
+          item.sprite.x,
+          item.sprite.y,
+        );
         const worldRotation = this.balanceScale.rotation + item.sprite.rotation;
 
         this.stackLayer.remove(item.sprite);
@@ -949,20 +688,11 @@ export class GameScene extends Phaser.Scene {
 
     this.showFeedback("Too imbalanced!", "#ff8080");
     this.isGameOver = true;
-    this.deathSequenceActive = true;
-    const weightDelta = this.getWeightDelta();
-    if (weightDelta === 0) {
-      this.deathTipDirection = Math.random() < 0.5 ? -1 : 1;
-    } else {
-      this.deathTipDirection = weightDelta > 0 ? 1 : -1;
-    }
 
-    this.deathSpinRemaining = DEATH_SPIN_TOTAL;
-    this.deathFlightActive = false;
-    this.deathFlightVx = 0;
-    this.deathFlightVy = 0;
+    const weightDelta = getWeightDelta(this.leftStack, this.rightStack);
+    this.beginDeathSequence(weightDelta);
 
-    this.clearFallingItems();
+    clearFallingItems(this.fallingItems);
     this.spillStacksOnDeath();
 
     this.gameOverTitle.setScale(1);
@@ -974,89 +704,40 @@ export class GameScene extends Phaser.Scene {
     this.setHudVisible(false);
   }
 
-  private addItemToStack(side: Side, item: FallingItem): void {
-    const stack = this.stackForSide(side);
-    const localPanX = this.panXForSide(side);
-    const stackHeight = this.getStackHeight(stack);
-
-    const sprite = this.createShapeSprite(item.kind, item.size);
-    sprite.setPosition(
-      localPanX + randomBetween(-PAN_RADIUS * 0.35, PAN_RADIUS * 0.35),
-      10 - PAN_RADIUS - item.size * 0.5 - stackHeight,
-    );
-    sprite.rotation = randomBetween(-0.14, 0.14);
-
-    this.stackLayer.add(sprite);
-
-    const stackedItem: StackedItem = {
-      sprite,
-      size: item.size,
-    };
-
-    stack.push(stackedItem);
-
-    this.score += 1;
-    this.playSfx(SUCCESS_SFX_KEY, SUCCESS_SFX_VOLUME);
-    this.refreshScoreText();
-    this.showFeedback("+1 caught", "#b3ffb3");
+  private beginDeathSequence(weightDelta: number): void {
+    this.deathSequenceActive = true;
+    if (weightDelta === 0) {
+      this.deathTipDirection = Math.random() < 0.5 ? -1 : 1;
+    } else {
+      this.deathTipDirection = weightDelta > 0 ? 1 : -1;
+    }
+    this.deathSpinRemaining = DEATH_SPIN_TOTAL;
+    this.deathFlightActive = false;
+    this.deathFlightVx = 0;
+    this.deathFlightVy = 0;
   }
 
-  private knockTopItemFromStack(side: Side): boolean {
-    const stack = this.stackForSide(side);
-    const removed = stack.pop();
-    if (!removed) {
-      return false;
+  private updateDeathSequence(deltaTime: number): void {
+    if (this.deathSpinRemaining > 0) {
+      const spinStep = Math.min(
+        this.deathSpinRemaining,
+        DEATH_SPIN_SPEED * deltaTime,
+      );
+      this.balanceScale.rotation += spinStep * this.deathTipDirection;
+      this.deathSpinRemaining -= spinStep;
+      return;
     }
 
-    const world = this.localToWorld(removed.sprite.x, removed.sprite.y);
-    const worldRotation = this.balanceScale.rotation + removed.sprite.rotation;
-
-    this.stackLayer.remove(removed.sprite);
-    removed.sprite.x = world.x;
-    removed.sprite.y = world.y;
-    removed.sprite.rotation = worldRotation;
-    this.debrisLayer.add(removed.sprite);
-
-    const sidePush = this.pushForSide(side);
-    this.looseBlocks.push({
-      sprite: removed.sprite,
-      vx: sidePush * randomBetween(3.6, 6.8),
-      vy: randomBetween(-6.4, -3.2),
-      spin: randomBetween(-0.18, 0.18),
-    });
-    this.score = Math.max(0, this.score - 1);
-    this.refreshScoreText();
-
-    return true;
-  }
-
-  private tryCatchItem(item: FallingItem, deltaTime: number): Side | null {
-    const leftLanding = this.getLandingWorldPosition("left", item.size);
-    const rightLanding = this.getLandingWorldPosition("right", item.size);
-    const horizontalWindow = PAN_RADIUS * 0.9 + item.size * 0.42;
-    const verticalWindow = Math.max(16, item.speed * deltaTime * 2.4);
-
-    const leftDeltaX = Math.abs(item.sprite.x - leftLanding.x);
-    const rightDeltaX = Math.abs(item.sprite.x - rightLanding.x);
-    const leftDeltaY = Math.abs(item.sprite.y - leftLanding.y);
-    const rightDeltaY = Math.abs(item.sprite.y - rightLanding.y);
-
-    const canCatchLeft =
-      leftDeltaX <= horizontalWindow && leftDeltaY <= verticalWindow;
-    const canCatchRight =
-      rightDeltaX <= horizontalWindow && rightDeltaY <= verticalWindow;
-
-    if (!canCatchLeft && !canCatchRight) {
-      return null;
+    if (!this.deathFlightActive) {
+      this.deathFlightActive = true;
+      this.deathFlightVx = this.deathTipDirection * randomBetween(14, 20);
+      this.deathFlightVy = randomBetween(-16, -11);
     }
 
-    if (canCatchLeft && canCatchRight) {
-      const leftDistance = Math.hypot(leftDeltaX, leftDeltaY);
-      const rightDistance = Math.hypot(rightDeltaX, rightDeltaY);
-      return leftDistance <= rightDistance ? "left" : "right";
-    }
-
-    return canCatchLeft ? "left" : "right";
+    this.balanceScale.x += this.deathFlightVx * deltaTime;
+    this.balanceScale.y += this.deathFlightVy * deltaTime;
+    this.deathFlightVy += DEATH_FLIGHT_GRAVITY * deltaTime;
+    this.balanceScale.rotation += this.deathTipDirection * 0.32 * deltaTime;
   }
 
   private setHudVisible(visible: boolean): void {

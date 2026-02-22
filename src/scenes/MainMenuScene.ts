@@ -6,9 +6,22 @@ import { createRetroBackground, createRetroButton } from "../game/ui";
 const SOUNDTRACK_KEY = "soundtrack";
 
 export class MainMenuScene extends Phaser.Scene {
+  private keySpace?: Phaser.Input.Keyboard.Key;
+  private keyEnter?: Phaser.Input.Keyboard.Key;
+  private keyL?: Phaser.Input.Keyboard.Key;
+
   constructor() {
     super("MainMenuScene");
   }
+
+  private readonly startGame = (): void => {
+    this.scene.stop("GameScene");
+    this.scene.start("GameScene");
+  };
+
+  private readonly openLeaderboard = (): void => {
+    this.scene.start("LeaderboardScene");
+  };
 
   preload(): void {
     this.load.image("duck", "/assets/duck.webp");
@@ -19,15 +32,8 @@ export class MainMenuScene extends Phaser.Scene {
     const width = this.scale.width;
     const height = this.scale.height;
     this.sound.stopByKey(SOUNDTRACK_KEY);
-    const startGame = (): void => {
-      this.scene.stop("GameScene");
-      this.scene.start("GameScene");
-    };
-    const openLeaderboard = (): void => {
-      this.scene.start("LeaderboardScene");
-    };
 
-    createRetroBackground(this, width, height);
+    createRetroBackground(this);
 
     const title = this.add.text(width * 0.5, height * 0.2, "DUCK SCALE", {
       fontFamily: RETRO_FONT,
@@ -65,7 +71,7 @@ export class MainMenuScene extends Phaser.Scene {
       width * 0.5,
       height * 0.54,
       "START GAME",
-      startGame,
+      this.startGame,
     );
 
     createRetroButton(
@@ -73,7 +79,7 @@ export class MainMenuScene extends Phaser.Scene {
       width * 0.5,
       height * 0.66,
       "LEADERBOARD",
-      openLeaderboard,
+      this.openLeaderboard,
     );
 
     const entries = readLeaderboard();
@@ -127,8 +133,25 @@ export class MainMenuScene extends Phaser.Scene {
       stagger: 180,
     });
 
-    this.input.keyboard?.on("keydown-SPACE", startGame);
-    this.input.keyboard?.on("keydown-ENTER", startGame);
-    this.input.keyboard?.on("keydown-L", openLeaderboard);
+    const keyboard = this.input.keyboard;
+    if (keyboard) {
+      this.keySpace = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+      this.keyEnter = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
+      this.keyL = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.L);
+    }
+  }
+
+  update(): void {
+    if (
+      (this.keySpace && Phaser.Input.Keyboard.JustDown(this.keySpace)) ||
+      (this.keyEnter && Phaser.Input.Keyboard.JustDown(this.keyEnter))
+    ) {
+      this.startGame();
+      return;
+    }
+
+    if (this.keyL && Phaser.Input.Keyboard.JustDown(this.keyL)) {
+      this.openLeaderboard();
+    }
   }
 }

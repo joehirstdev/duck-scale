@@ -6,9 +6,17 @@ import { readLeaderboard } from "../game/leaderboard";
 const SOUNDTRACK_KEY = "soundtrack";
 
 export class LeaderboardScene extends Phaser.Scene {
+  private keyM?: Phaser.Input.Keyboard.Key;
+  private keyEsc?: Phaser.Input.Keyboard.Key;
+  private keyEnter?: Phaser.Input.Keyboard.Key;
+
   constructor() {
     super("LeaderboardScene");
   }
+
+  private readonly goToMenu = (): void => {
+    this.scene.start("MainMenuScene");
+  };
 
   preload(): void {
     this.load.image("duck", "/assets/duck.webp");
@@ -18,9 +26,6 @@ export class LeaderboardScene extends Phaser.Scene {
     const width = this.scale.width;
     const height = this.scale.height;
     this.sound.stopByKey(SOUNDTRACK_KEY);
-    const goToMenu = (): void => {
-      this.scene.start("MainMenuScene");
-    };
 
     createRetroBackground(this, width, height);
 
@@ -87,10 +92,29 @@ export class LeaderboardScene extends Phaser.Scene {
     mascot.setScale(0.28);
     mascot.setAngle(-14);
 
-    createRetroButton(this, width * 0.5, height - 70, "BACK TO MENU", goToMenu);
+    createRetroButton(
+      this,
+      width * 0.5,
+      height - 70,
+      "BACK TO MENU",
+      this.goToMenu,
+    );
 
-    this.input.keyboard?.on("keydown-M", goToMenu);
-    this.input.keyboard?.on("keydown-ESC", goToMenu);
-    this.input.keyboard?.on("keydown-ENTER", goToMenu);
+    const keyboard = this.input.keyboard;
+    if (keyboard) {
+      this.keyM = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
+      this.keyEsc = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+      this.keyEnter = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
+    }
+  }
+
+  update(): void {
+    if (
+      (this.keyM && Phaser.Input.Keyboard.JustDown(this.keyM)) ||
+      (this.keyEsc && Phaser.Input.Keyboard.JustDown(this.keyEsc)) ||
+      (this.keyEnter && Phaser.Input.Keyboard.JustDown(this.keyEnter))
+    ) {
+      this.goToMenu();
+    }
   }
 }
