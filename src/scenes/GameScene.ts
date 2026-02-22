@@ -43,12 +43,15 @@ const QUACK_SFX_VOLUME = 0.12;
 const GLASS_BREAK_SFX_VOLUME = 0.35;
 const SUCCESS_SFX_VOLUME = 0.8;
 const LOSE_SFX_VOLUME = 0.15;
+const DIAL_MAX_NEEDLE_ANGLE = 0.72;
+const DIAL_NEEDLE_LERP = 0.18;
 
 export class GameScene extends Phaser.Scene {
   private background!: Phaser.GameObjects.Graphics;
   private lanes!: Phaser.GameObjects.Graphics;
   private itemLayer!: Phaser.GameObjects.Container;
   private balanceScale!: Phaser.GameObjects.Container;
+  private balanceDialNeedle!: Phaser.GameObjects.Graphics;
   private stackLayer!: Phaser.GameObjects.Container;
   private debrisLayer!: Phaser.GameObjects.Container;
 
@@ -363,6 +366,7 @@ export class GameScene extends Phaser.Scene {
       );
     }
 
+    this.updateBalanceDial(deltaTime);
     this.drawWorld();
   }
 
@@ -389,10 +393,55 @@ export class GameScene extends Phaser.Scene {
     rightArm.fillStyle(0xf0be7a).fillRect(PAN_OFFSET - 3, -15, 3, 26);
     scale.add(rightArm);
 
+    scale.add(this.createBalanceDial());
     scale.add(this.createPan(-PAN_OFFSET, 0xffd789));
     scale.add(this.createPan(PAN_OFFSET, 0xff8c74));
 
     return scale;
+  }
+
+  private createBalanceDial(): Phaser.GameObjects.Container {
+    const dial = this.add.container(0, -6);
+    const radius = 18;
+    const start = Math.PI * 0.25;
+    const end = Math.PI * 0.75;
+
+    const face = this.add.graphics();
+    face.fillStyle(0xfff3d4, 0.93);
+    face.beginPath();
+    face.moveTo(0, 0);
+    face.arc(0, 0, radius, start, end, false);
+    face.closePath();
+    face.fillPath();
+    face.lineStyle(2, 0x5e3a2f, 1);
+    face.beginPath();
+    face.arc(0, 0, radius, start, end, false);
+    face.strokePath();
+
+    const ticks = this.add.graphics();
+    ticks.lineStyle(1, 0x9f6b53, 0.95);
+    for (const angle of [0.25, 0.375, 0.5, 0.625, 0.75]) {
+      const radians = angle * Math.PI;
+      const inner = radius - 5;
+      const outer = radius - 1;
+      ticks.lineBetween(
+        Math.cos(radians) * inner,
+        Math.sin(radians) * inner,
+        Math.cos(radians) * outer,
+        Math.sin(radians) * outer,
+      );
+    }
+
+    this.balanceDialNeedle = this.add.graphics();
+    this.balanceDialNeedle.lineStyle(3, 0xd54f45, 1);
+    this.balanceDialNeedle.lineBetween(0, 0, 0, 14);
+    this.balanceDialNeedle.fillStyle(0x632d26, 1).fillCircle(0, 0, 3);
+
+    dial.add(face);
+    dial.add(ticks);
+    dial.add(this.balanceDialNeedle);
+
+    return dial;
   }
 
   private createPan(x: number, color: number): Phaser.GameObjects.Graphics {
@@ -780,6 +829,15 @@ export class GameScene extends Phaser.Scene {
     return Math.abs(this.getWeightDelta());
   }
 
+  private updateBalanceDial(deltaTime: number): void {
+    const targetNeedleRotation =
+      -clamp(this.getWeightDelta() / MAX_WEIGHT_IMBALANCE, -1, 1) *
+      DIAL_MAX_NEEDLE_ANGLE;
+    const lerp = Math.min(1, DIAL_NEEDLE_LERP * deltaTime);
+    this.balanceDialNeedle.rotation +=
+      (targetNeedleRotation - this.balanceDialNeedle.rotation) * lerp;
+  }
+
   private getLandingWorldPosition(
     side: Side,
     incomingSize: number,
@@ -1035,6 +1093,7 @@ export class GameScene extends Phaser.Scene {
     this.balanceScale.rotation = 0;
     this.balanceScale.x = this.scaleXMid();
     this.balanceScale.y = this.scale.height - SCALE_BASELINE_OFFSET;
+    this.balanceDialNeedle.rotation = 0;
 
     this.feedbackText.setAlpha(0);
     this.gameOverTitle.setScale(1);
