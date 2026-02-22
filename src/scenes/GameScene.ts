@@ -59,10 +59,13 @@ export class GameScene extends Phaser.Scene {
   private keyA!: Phaser.Input.Keyboard.Key;
   private keyD!: Phaser.Input.Keyboard.Key;
   private keyEsc!: Phaser.Input.Keyboard.Key;
+  private keyEnter!: Phaser.Input.Keyboard.Key;
+  private keyH!: Phaser.Input.Keyboard.Key;
+  private keyL!: Phaser.Input.Keyboard.Key;
+  private keyM!: Phaser.Input.Keyboard.Key;
+  private keyQ!: Phaser.Input.Keyboard.Key;
   private keyR!: Phaser.Input.Keyboard.Key;
   private keySpace!: Phaser.Input.Keyboard.Key;
-  private keyM!: Phaser.Input.Keyboard.Key;
-  private keyL!: Phaser.Input.Keyboard.Key;
 
   private fallingItems: FallingItem[] = [];
   private leftStack: StackedItem[] = [];
@@ -155,10 +158,13 @@ export class GameScene extends Phaser.Scene {
     this.keyA = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
     this.keyD = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
     this.keyEsc = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ESC);
+    this.keyH = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.H);
     this.keyR = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.R);
     this.keySpace = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
+    this.keyEnter = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.ENTER);
     this.keyM = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.M);
     this.keyL = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.L);
+    this.keyQ = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.Q);
 
     this.initializeFreshRun();
     this.layout(true);
@@ -169,13 +175,20 @@ export class GameScene extends Phaser.Scene {
 
     this.layout(false);
 
-    if (!this.isGameOver && Phaser.Input.Keyboard.JustDown(this.keyEsc)) {
+    if (
+      !this.isGameOver &&
+      (Phaser.Input.Keyboard.JustDown(this.keyEsc) ||
+        Phaser.Input.Keyboard.JustDown(this.keyQ))
+    ) {
       this.setPaused(!this.isPaused);
       return;
     }
 
     if (this.isPaused) {
-      if (Phaser.Input.Keyboard.JustDown(this.keySpace)) {
+      if (
+        Phaser.Input.Keyboard.JustDown(this.keySpace) ||
+        Phaser.Input.Keyboard.JustDown(this.keyEnter)
+      ) {
         this.setPaused(false);
       }
 
@@ -191,12 +204,16 @@ export class GameScene extends Phaser.Scene {
     if (this.isGameOver) {
       if (
         Phaser.Input.Keyboard.JustDown(this.keyR) ||
-        Phaser.Input.Keyboard.JustDown(this.keySpace)
+        Phaser.Input.Keyboard.JustDown(this.keySpace) ||
+        Phaser.Input.Keyboard.JustDown(this.keyEnter)
       ) {
         this.resetRun();
       }
 
-      if (Phaser.Input.Keyboard.JustDown(this.keyEsc)) {
+      if (
+        Phaser.Input.Keyboard.JustDown(this.keyEsc) ||
+        Phaser.Input.Keyboard.JustDown(this.keyQ)
+      ) {
         this.resetDeathState();
         this.scene.start("MainMenuScene");
         return;
@@ -216,8 +233,10 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (!this.isGameOver) {
-      const moveLeft = this.cursors.left.isDown || this.keyA.isDown;
-      const moveRight = this.cursors.right.isDown || this.keyD.isDown;
+      const moveLeft =
+        this.cursors.left.isDown || this.keyA.isDown || this.keyH.isDown;
+      const moveRight =
+        this.cursors.right.isDown || this.keyD.isDown || this.keyL.isDown;
       const inputDirection = Number(moveRight) - Number(moveLeft);
 
       this.balanceScale.x += inputDirection * PLAYER_SPEED * deltaTime;
@@ -245,15 +264,15 @@ export class GameScene extends Phaser.Scene {
         if (caughtSide) {
           const expectedSide = expectedSideForShape(item.kind);
           if (caughtSide === expectedSide) {
+            this.removeFallingItemAt(index);
             this.addItemToStack(caughtSide, item);
           } else {
             const knocked = this.knockTopItemFromStack(caughtSide);
             if (knocked) {
+              this.removeFallingItemAt(index); // make this spin with animation
               this.showFeedback("Wrong side!", "#ff9e80");
             }
           }
-
-          this.removeFallingItemAt(index);
 
           if (this.isGameOver) {
             break;

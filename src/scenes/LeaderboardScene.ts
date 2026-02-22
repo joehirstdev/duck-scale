@@ -48,7 +48,7 @@ export class LeaderboardScene extends Phaser.Scene {
         const yPos = 170 + index * 74;
         const color = index === 0 ? "#ffd700" : "#ffffff";
 
-        const rank = this.add.text(width * 0.28, yPos, `#${index + 1}`, {
+        const rank = this.add.text(width * 0.25, yPos, `#${index + 1}`, {
           fontFamily: RETRO_FONT,
           fontSize: "40px",
           color,
@@ -57,7 +57,7 @@ export class LeaderboardScene extends Phaser.Scene {
         });
         rank.setOrigin(0.5);
 
-        const score = this.add.text(width * 0.52, yPos, `${entry.score}`, {
+        const score = this.add.text(width * 0.5, yPos, `${entry.score}`, {
           fontFamily: RETRO_FONT,
           fontSize: "40px",
           color,
@@ -66,7 +66,7 @@ export class LeaderboardScene extends Phaser.Scene {
         });
         score.setOrigin(0.5);
 
-        const date = this.add.text(width * 0.78, yPos, entry.date, {
+        const date = this.add.text(width * 0.75, yPos, entry.date, {
           fontFamily: RETRO_FONT,
           fontSize: "24px",
           color,
@@ -85,11 +85,15 @@ export class LeaderboardScene extends Phaser.Scene {
       this.scene.start("MainMenuScene");
     });
 
+    this.input.keyboard?.on("keydown-M", () => {
+      this.scene.start("MainMenuScene");
+    });
+
     this.input.keyboard?.on("keydown-ESC", () => {
       this.scene.start("MainMenuScene");
     });
 
-    this.input.keyboard?.on("keydown-M", () => {
+    this.input.keyboard?.on("keydown-ENTER", () => {
       this.scene.start("MainMenuScene");
     });
   }

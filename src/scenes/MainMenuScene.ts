@@ -19,7 +19,7 @@ export class MainMenuScene extends Phaser.Scene {
 
     createRetroBackground(this, width, height);
 
-    const title = this.add.text(width * 0.5, height * 0.22, "DUCK SCALE", {
+    const title = this.add.text(width * 0.5, height * 0.2, "JAM STACK", {
       fontFamily: RETRO_FONT,
       fontSize: "54px",
       color: "#fff3ce",
@@ -79,7 +79,7 @@ export class MainMenuScene extends Phaser.Scene {
     const instructions = this.add.text(
       width * 0.5,
       height * 0.88,
-      "A/D or ARROWS to move | Catch ducks left and jam right",
+      "A/D or ARROWS to move | Catch Ducks and Jam without Tipping the Scales",
       {
         fontFamily: RETRO_FONT,
         fontSize: "18px",
@@ -108,6 +108,18 @@ export class MainMenuScene extends Phaser.Scene {
       yoyo: true,
       repeat: -1,
       stagger: 180,
+    });
+
+    this.input.keyboard?.on("keydown-SPACE", () => {
+      this.scene.start("GameScene");
+    });
+
+    this.input.keyboard?.on("keydown-ENTER", () => {
+      this.scene.start("GameScene");
+    });
+
+    this.input.keyboard?.on("keydown-L", () => {
+      this.scene.start("LeaderboardScene");
     });
   }
 }
