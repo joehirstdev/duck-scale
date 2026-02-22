@@ -13,7 +13,8 @@
     "lint-staged": "lint-staged",
     "lint": "prettier --check . && eslint .",
     "lint:fix": "eslint . --fix",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "deploy": "bun run build && wrangler deploy"
   },
   "lint-staged": {
     "*.{js,ts,svelte}": [
